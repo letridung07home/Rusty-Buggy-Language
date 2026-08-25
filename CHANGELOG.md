@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-25
+
+### Changed
+
+- Restructured project documentation by moving the language reference to
+  `docs/`, adding development and maintenance guidance, and streamlining the
+  README.
+
 ## [0.5.0] - 2026-08-25
 
 ### Added
