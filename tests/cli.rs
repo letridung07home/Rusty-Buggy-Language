@@ -1,10 +1,67 @@
-use std::process::{Command, Output};
+use std::fs;
+use std::io::Write;
+use std::path::PathBuf;
+use std::process::{Command, Output, Stdio};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 fn run_cli(arguments: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_rusty-buggy-language"))
         .args(arguments)
         .output()
         .expect("failed to execute the compiled CLI")
+}
+
+fn run_cli_with_stdin(arguments: &[&str], input: &[u8]) -> Output {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_rusty-buggy-language"))
+        .args(arguments)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to execute the compiled CLI");
+
+    child
+        .stdin
+        .take()
+        .expect("failed to open the CLI standard input")
+        .write_all(input)
+        .expect("failed to write the CLI standard input");
+
+    child
+        .wait_with_output()
+        .expect("failed to collect the CLI output")
+}
+
+struct TemporarySource {
+    path: PathBuf,
+}
+
+impl TemporarySource {
+    fn new(contents: &[u8]) -> Self {
+        let unique_id = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after the Unix epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "rusty-buggy-language-cli-{}-{unique_id}",
+            std::process::id()
+        ));
+
+        fs::write(&path, contents).expect("failed to create the temporary source file");
+        Self { path }
+    }
+
+    fn as_str(&self) -> &str {
+        self.path
+            .to_str()
+            .expect("temporary source path should be valid UTF-8")
+    }
+}
+
+impl Drop for TemporarySource {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
 }
 
 #[test]
@@ -22,6 +79,31 @@ fn evaluates_program_with_immutable_variables() {
 
     assert!(output.status.success());
     assert_eq!(output.stdout, b"100\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn evaluates_program_from_a_file_with_both_file_flags() {
+    let source = TemporarySource::new(b"let rate = 20;\nlet quantity = 5;\nrate * quantity");
+
+    for flag in ["-f", "--file"] {
+        let output = run_cli(&[flag, source.as_str()]);
+
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"100\n");
+        assert!(output.stderr.is_empty());
+    }
+}
+
+#[test]
+fn evaluates_multiline_program_from_standard_input() {
+    let output = run_cli_with_stdin(
+        &["--stdin"],
+        b"let first = 2;\nlet second = first + 3;\nsecond * 4",
+    );
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"20\n");
     assert!(output.stderr.is_empty());
 }
 
@@ -65,6 +147,16 @@ fn reports_undefined_variable_on_stderr_without_stdout() {
 }
 
 #[test]
+fn preserves_evaluation_errors_for_file_input() {
+    let source = TemporarySource::new(b"8 / (3 - 3)");
+    let output = run_cli(&["--file", source.as_str()]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(output.stderr, b"error: division by zero\n");
+}
+
+#[test]
 fn reports_missing_expression_with_failure_status() {
     let output = run_cli(&[]);
 
@@ -77,13 +169,108 @@ fn reports_missing_expression_with_failure_status() {
 }
 
 #[test]
+fn reports_missing_file_path() {
+    for flag in ["-f", "--file"] {
+        let output = run_cli(&[flag]);
+
+        assert!(!output.status.success());
+        assert!(output.stdout.is_empty());
+        assert_eq!(output.stderr, b"error: missing file path after -f/--file\n");
+    }
+}
+
+#[test]
+fn rejects_conflicting_source_modes() {
+    let source = TemporarySource::new(b"1");
+
+    let file_then_stdin = run_cli(&["--file", source.as_str(), "--stdin"]);
+    assert!(!file_then_stdin.status.success());
+    assert!(file_then_stdin.stdout.is_empty());
+    assert_eq!(
+        file_then_stdin.stderr,
+        b"error: -f/--file accepts exactly one path and cannot be combined with additional arguments\n"
+    );
+
+    let stdin_then_file = run_cli(&["--stdin", "--file", source.as_str()]);
+    assert!(!stdin_then_file.status.success());
+    assert!(stdin_then_file.stdout.is_empty());
+    assert_eq!(
+        stdin_then_file.stderr,
+        b"error: --stdin cannot be combined with additional arguments\n"
+    );
+}
+
+#[test]
+fn rejects_additional_arguments_after_file_input() {
+    let source = TemporarySource::new(b"1");
+    let output = run_cli(&["--file", source.as_str(), "extra"]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        output.stderr,
+        b"error: -f/--file accepts exactly one path and cannot be combined with additional arguments\n"
+    );
+}
+
+#[test]
+fn rejects_additional_arguments_after_standard_input() {
+    let output = run_cli_with_stdin(&["--stdin", "extra"], b"1");
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        output.stderr,
+        b"error: --stdin cannot be combined with additional arguments\n"
+    );
+}
+
+#[test]
+fn reports_unreadable_file_with_path_and_io_reason() {
+    let source = TemporarySource::new(b"1");
+    let missing_path = format!("{}.missing", source.as_str());
+    let output = run_cli(&["--file", missing_path.as_str()]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8(output.stderr).expect("CLI stderr should be UTF-8");
+    assert!(stderr.starts_with("error: failed to read source file '"));
+    assert!(stderr.contains(".missing': "));
+}
+
+#[test]
+fn reports_invalid_utf8_file_with_source_context() {
+    let source = TemporarySource::new(&[b'1', b' ', 0xff]);
+    let output = run_cli(&["--file", source.as_str()]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8(output.stderr).expect("CLI stderr should be UTF-8");
+    assert!(stderr.starts_with("error: source file '"));
+    assert!(stderr.contains("' is not valid UTF-8: "));
+}
+
+#[test]
+fn reports_invalid_utf8_standard_input_with_source_context() {
+    let output = run_cli_with_stdin(&["--stdin"], &[b'1', b' ', 0xff]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8(output.stderr).expect("CLI stderr should be UTF-8");
+    assert_eq!(
+        stderr,
+        "error: standard input is not valid UTF-8: invalid utf-8 sequence of 1 bytes from index 2\n"
+    );
+}
+
+#[test]
 fn prints_help_for_short_flag() {
     let output = run_cli(&["-h"]);
 
     assert!(output.status.success());
     assert_eq!(
         output.stdout,
-        b"Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n\nEvaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, parentheses, and prefix -.\n"
+        b"Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -f <path> | --file <path>\n       rusty-buggy-language --stdin\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n\nEvaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, parentheses, and prefix -.\n\nThe program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input.\n"
     );
     assert!(output.stderr.is_empty());
 }
@@ -95,7 +282,7 @@ fn prints_help_for_long_flag() {
     assert!(output.status.success());
     assert_eq!(
         output.stdout,
-        b"Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n\nEvaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, parentheses, and prefix -.\n"
+        b"Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -f <path> | --file <path>\n       rusty-buggy-language --stdin\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n\nEvaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, parentheses, and prefix -.\n\nThe program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input.\n"
     );
     assert!(output.stderr.is_empty());
 }

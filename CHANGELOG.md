@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added CLI support for reading complete UTF-8 programs from files with `-f`
+  or `--file`, and from standard input with `--stdin`.
+
+### Changed
+
+- Expanded CLI help, documentation, and validation for mutually exclusive
+  inline, file, and standard-input source modes while preserving the public
+  `evaluate(&str) -> Result<i64, Error>` API.
+
 ## [0.7.0] - 2026-08-25
 
 ### Changed

@@ -6,16 +6,28 @@ immutable variable declarations followed by exactly one final expression.
 
 ## Running a program
 
-Pass the complete program as the executable's only command-line argument. The
-shell usually requires quoting programs that contain spaces or operators:
+Pass the complete program as the executable's only command-line argument, or
+select a source file or standard input:
 
 ```bash
 cargo run -- "let rate = 20; let quantity = 5; rate * quantity"
 # 100
+
+cargo run -- --file program.rbl
+# 100
+
+cargo run -- --stdin < program.rbl
+# 100
 ```
 
-The evaluator does not read source files or standard input. It accepts exactly
-one argument, so missing or additional arguments are errors.
+The inline form is usually quoted by the shell when a program contains spaces
+or operators. `-f <path>` and `--file <path>` read the complete named file as
+UTF-8. `--stdin` reads the complete standard input as UTF-8. The selected text
+is passed unchanged to the evaluator, so all three modes have the same language
+semantics. The source modes are mutually exclusive; `-` is an ordinary file
+path when it follows `-f` or `--file` and does not select standard input.
+
+Missing paths, conflicting modes, and additional arguments are errors.
 
 The following flags are recognized only when they are the sole argument:
 
@@ -118,7 +130,8 @@ On an invalid invocation or program, the CLI prints `error: <message>` to
 standard error, prints no result, and exits unsuccessfully. Errors include:
 
 - missing or extra command-line arguments;
-- an argument that is not valid UTF-8;
+- a missing file path, conflicting source modes, or an unreadable source file;
+- inline, file, or standard-input source that is not valid UTF-8;
 - an empty expression, malformed declarations, or a missing final expression;
 - unexpected characters, standalone `!` or `=`, unsupported unary `+`,
   unmatched parentheses, chained comparisons, or trailing input;

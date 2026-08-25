@@ -30,6 +30,9 @@ lexer -> tokens -> parser -> program AST -> evaluator -> integer result
         ^
         |
 private CLI adapter <- process startup
+        ^
+        |
+source selection and complete UTF-8 input read
 ```
 
 - `src/lib.rs` owns the public library boundary and orchestration. Its sole
@@ -41,13 +44,16 @@ private CLI adapter <- process startup
   text into tokens; the recursive-descent parser builds declarations and
   expressions according to precedence; and the evaluator resolves immutable
   variables and performs checked `i64` arithmetic.
-- `src/cli.rs` is a private executable adapter for argument-count validation,
-  help and version flags, standard-output/error behavior, and exit status.
+- `src/cli.rs` is a private executable adapter for source-mode selection,
+  complete UTF-8 reads from files or standard input, argument validation, help
+  and version flags, standard-output/error behavior, and exit status. It passes
+  the selected source unchanged to the public `evaluate` function.
   `src/main.rs` only supplies process arguments and delegates the exit code.
 - Unit tests next to each pipeline stage cover lexical, syntax, and evaluation
   behavior. Library-facade tests cover the public API and error display.
-  `tests/cli.rs` remains the executable-contract suite for output and exit
-  status.
+  `src/cli.rs` tests cover source selection and injected input reads, while
+  `tests/cli.rs` remains the executable-contract suite for inline, file, and
+  standard-input behavior, output, and exit status.
 - `.github/workflows/ci.yml` checks formatting, compilation, tests, Clippy,
   and Rust documentation on stable Rust, then checks compilation and tests on
   the minimum supported Rust version. `.github/workflows/release.yml` creates
@@ -73,10 +79,11 @@ When adding a syntactic feature, consider each stage explicitly:
    error paths.
 
 Keep the language intentionally narrow unless a feature has a clear benefit
-for AI coding agents. Files, standard input, comments, floating-point values,
-unary plus, and arbitrary-precision integers are not currently supported;
-adding any of them requires a deliberate specification update rather than a
-documentation-only change.
+for AI coding agents. Comments, floating-point values, unary plus, and
+arbitrary-precision integers are not currently supported; adding any of them
+requires a deliberate specification update rather than a documentation-only
+change. File and standard-input handling belongs to the CLI adapter and must
+not change the public `evaluate(&str) -> Result<i64, Error>` API.
 
 ## Compatibility and verification
 
