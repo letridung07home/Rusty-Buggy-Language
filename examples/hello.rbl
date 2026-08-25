@@ -1,0 +1,3 @@
+// The classic first program: a single integer expression.
+// Run with: cargo run -- examples/hello.rbl  (or its built binary)
+1 + 2 * (3 + 4)

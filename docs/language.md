@@ -22,10 +22,13 @@ cargo run -- --stdin < program.rbl
 
 The inline form is usually quoted by the shell when a program contains spaces
 or operators. `-f <path>` and `--file <path>` read the complete named file as
-UTF-8. `--stdin` reads the complete standard input as UTF-8. The selected text
-is passed unchanged to the evaluator, so all three modes have the same language
-semantics. The source modes are mutually exclusive; `-` is an ordinary file
-path when it follows `-f` or `--file` and does not select standard input.
+UTF-8. `--stdin` reads the complete standard input as UTF-8. `--repl` starts an
+interactive loop that reads one program per line from standard input and
+prints each result, reusing the same evaluator. When the selected text avoids
+`--repl`, it is passed unchanged to the evaluator, so all three source modes
+have the same language semantics. The source modes are mutually exclusive;
+`-` is an ordinary file path when it follows `-f` or `--file` and does not
+select standard input.
 
 Missing paths, conflicting modes, and additional arguments are errors.
 
@@ -35,6 +38,7 @@ The following flags are recognized only when they are the sole argument:
 | --- | --- |
 | `-h`, `--help` | Print usage and a short feature summary. |
 | `-V`, `--version` | Print `rusty-buggy-language` followed by the package version. |
+| `--repl` | Start an interactive loop that reads one program per line and prints each result. |
 
 Two optional configuration flags may appear alongside an inline program, a
 `-f`/`--file` source, or `--stdin`:

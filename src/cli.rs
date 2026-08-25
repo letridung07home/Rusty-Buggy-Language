@@ -1,12 +1,12 @@
 use std::ffi::OsString;
 use std::fs;
-use std::io::{self, Read};
+use std::io::{self, BufRead, BufReader, Read};
 use std::path::Path;
 use std::process::ExitCode;
 
 use rusty_buggy_language::{evaluate_with_limits, Error, Limits};
 
-const HELP: &str = "Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -f <path> | --file <path>\n       rusty-buggy-language --stdin\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n       rusty-buggy-language [--positions] [--input-limit <bytes>] <program>\n       rusty-buggy-language [--positions] [--input-limit <bytes>] -f <path> | --file <path>\n       rusty-buggy-language [--positions] [--input-limit <bytes>] --stdin\n\nEvaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, %, // and /* */ comments, parentheses, and prefix -.\n\nThe program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input. Source modes are mutually exclusive.\n\n--positions      Also report the line and column of evaluation or syntax errors.\n--input-limit N  Reject programs longer than N bytes before evaluation.";
+const HELP: &str = "Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -f <path> | --file <path>\n       rusty-buggy-language --stdin\n       rusty-buggy-language --repl\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n       rusty-buggy-language [--positions] [--input-limit <bytes>] <program>\n       rusty-buggy-language [--positions] [--input-limit <bytes>] -f <path> | --file <path>\n       rusty-buggy-language [--positions] [--input-limit <bytes>] --stdin\n\nEvaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, %, // and /* */ comments, parentheses, and prefix -.\n\nThe program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input. Source modes are mutually exclusive. `--repl` reads one program per line from standard input and prints each result.\n\n--positions      Also report the line and column of evaluation or syntax errors.\n--input-limit N  Reject programs longer than N bytes before evaluation.";
 
 const VERSION: &str = concat!("rusty-buggy-language ", env!("CARGO_PKG_VERSION"));
 
@@ -14,6 +14,18 @@ pub(super) fn run<I>(args: I) -> ExitCode
 where
     I: IntoIterator<Item = OsString>,
 {
+    let args: Vec<OsString> = args.into_iter().collect();
+
+    if args.len() == 1 && args[0] == "--repl" {
+        let stdin = io::stdin();
+        let succeeded = run_repl(BufReader::new(stdin.lock()), &mut io::stdout());
+        return if succeeded {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::FAILURE
+        };
+    }
+
     match execute(args) {
         Ok(Output::Value(value)) => println!("{value}"),
         Ok(Output::Help) => println!("{HELP}"),
@@ -25,6 +37,48 @@ where
     }
 
     ExitCode::SUCCESS
+}
+
+/// Runs the interactive REPL: reads one program per line from `input` and
+/// writes each result to `output`, reusing the exact CLI evaluator. Reading
+/// goes through a buffered reader so callers (and tests) can inject input,
+/// and all prompts and results are written to the supplied output writer.
+/// Returns whether at least one program was evaluated.
+fn run_repl<R, W>(mut input: R, output: &mut W) -> bool
+where
+    R: BufRead,
+    W: io::Write,
+{
+    let mut value_count = 0_usize;
+    let mut line = String::new();
+
+    loop {
+        line.clear();
+        let read = input
+            .read_line(&mut line)
+            .expect("failed to read a REPL line");
+        if read == 0 {
+            // End of input (e.g. Ctrl-D); do not emit a dangling prompt.
+            break;
+        }
+
+        let _ = writeln!(output, ">");
+
+        let program = line.trim_end();
+        if program.is_empty() {
+            continue;
+        }
+
+        value_count += 1;
+        match evaluate_with_limits(program, &Limits::default()) {
+            Ok(value) => writeln!(output, "{value}").expect("failed to write REPL result"),
+            Err(error) => {
+                writeln!(output, "error: {}", error.message()).expect("failed to write REPL result")
+            }
+        }
+    }
+
+    value_count > 0
 }
 
 #[derive(Debug, PartialEq)]
@@ -224,11 +278,56 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{execute, execute_with_reader, Output};
+    use super::{execute, execute_with_reader, run_repl, Output};
     use std::ffi::OsString;
+    use std::io::BufReader;
 
     fn arguments(arguments: &[&str]) -> Vec<OsString> {
         arguments.iter().map(OsString::from).collect()
+    }
+
+    /// Drives the REPL over `input` and returns the captured output and
+    /// whether any program was evaluated.
+    fn repl(input: &str) -> (String, bool) {
+        let reader = BufReader::new(std::io::Cursor::new(input.as_bytes().to_vec()));
+        let mut output = Vec::new();
+        let succeeded = run_repl(reader, &mut output);
+        (
+            String::from_utf8(output).expect("REPL output should be UTF-8"),
+            succeeded,
+        )
+    }
+
+    #[test]
+    fn repl_prints_a_prompt_and_result_per_line() {
+        let (output, succeeded) = repl("1 + 2 * 3\nlet x = 4; x * 5\n");
+
+        assert!(succeeded);
+        assert_eq!(output, ">\n7\n>\n20\n");
+    }
+
+    #[test]
+    fn repl_reports_errors_and_continues() {
+        let (output, succeeded) = repl("8 / (3 - 3)\n1 + 1\n");
+
+        assert!(succeeded);
+        assert_eq!(output, ">\nerror: division by zero\n>\n2\n");
+    }
+
+    #[test]
+    fn repl_skips_blank_lines() {
+        let (output, succeeded) = repl("\n\n1 + 1\n");
+
+        assert!(succeeded);
+        assert_eq!(output, ">\n>\n>\n2\n");
+    }
+
+    #[test]
+    fn repl_with_no_programs_fails() {
+        let (output, succeeded) = repl("\n\n");
+
+        assert!(!succeeded);
+        assert_eq!(output, ">\n>\n");
     }
 
     #[test]

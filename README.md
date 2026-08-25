@@ -42,6 +42,10 @@ cargo run -- --file program.rbl
 
 cargo run -- --stdin < program.rbl
 
+cargo run -- --repl
+> 1 + 2 * (3 + 4)
+15
+
 cargo run -- --positions "8 / (3 - 3)"
 # error: division by zero
 #  at line 1, column 3
@@ -54,14 +58,17 @@ cargo run -- --version
 
 The source-selection modes are mutually exclusive. File and standard-input
 sources are read in full as UTF-8 and passed unchanged to the same evaluator as
-inline programs. The evaluator guards against oversized input (configurable
+inline programs, while `--repl` reads one program per line and prints each
+result. The evaluator guards against oversized input (configurable
 with `--input-limit <bytes>`) and excessively nested programs, and `--positions`
 adds line and column information to errors. See the docs links below for
 details.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for repository setup, validation, and
 release guidance. See the [development guide](docs/development.md) for
-implementation architecture and language-maintenance notes.
+implementation architecture and language-maintenance notes. Work through the
+[tutorial](docs/tutorial.md) or run the programs in [`examples/`](examples/)
+for ready-made illustrations of each feature.
 
 ## License
 
