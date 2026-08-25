@@ -123,13 +123,13 @@ mod tests {
 
     #[test]
     fn comments_do_not_shift_error_positions() {
-        // The '/' operator sits at line 3, column 4 of the commented program.
-        let error = evaluate("1 + 2\n// note\n 8 / (3 - 3)").unwrap_err();
+        // The '/' operator sits at line 2, column 3 of the commented program.
+        let error = evaluate("// note\n8 / (3 - 3)").unwrap_err();
 
         assert_eq!(error.to_string(), "division by zero");
         assert_eq!(
             error.position(),
-            Some(super::SourcePosition { line: 3, column: 4 })
+            Some(super::SourcePosition { line: 2, column: 3 })
         );
     }
 

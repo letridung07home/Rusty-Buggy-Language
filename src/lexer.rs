@@ -376,7 +376,11 @@ mod tests {
 
         assert_eq!(
             kinds,
-            vec![TokenKind::Integer(1), TokenKind::Plus, TokenKind::Integer(2)]
+            vec![
+                TokenKind::Integer(1),
+                TokenKind::Plus,
+                TokenKind::Integer(2)
+            ]
         );
     }
 
@@ -390,20 +394,30 @@ mod tests {
 
     #[test]
     fn line_comments_run_to_the_end_of_the_input() {
-        let tokens = Lexer::new("1 + 2 // no trailing newline").tokenize().unwrap();
+        let tokens = Lexer::new("1 + 2 // no trailing newline")
+            .tokenize()
+            .unwrap();
 
         assert_eq!(tokens.len(), 3);
     }
 
     #[test]
     fn skips_block_comments_including_empty_and_multiline_ones() {
-        for input in ["1 /* comment */ + 2", "1/**/+2", "1 /*\nmulti\nline\n*/ + 2"] {
+        for input in [
+            "1 /* comment */ + 2",
+            "1/**/+2",
+            "1 /*\nmulti\nline\n*/ + 2",
+        ] {
             let tokens = Lexer::new(input).tokenize().unwrap();
             let kinds: Vec<TokenKind> = tokens.iter().map(|token| token.kind.clone()).collect();
 
             assert_eq!(
                 kinds,
-                vec![TokenKind::Integer(1), TokenKind::Plus, TokenKind::Integer(2)],
+                vec![
+                    TokenKind::Integer(1),
+                    TokenKind::Plus,
+                    TokenKind::Integer(2)
+                ],
                 "input: {input}"
             );
         }
@@ -414,7 +428,13 @@ mod tests {
         let tokens = Lexer::new("1 /* first\nsecond */ + 2").tokenize().unwrap();
 
         // The '+' after the block comment is at line 2, column 11.
-        assert_eq!(tokens[1].position, SourcePosition { line: 2, column: 11 });
+        assert_eq!(
+            tokens[1].position,
+            SourcePosition {
+                line: 2,
+                column: 11
+            }
+        );
     }
 
     #[test]
@@ -454,7 +474,11 @@ mod tests {
 
         assert_eq!(
             kinds,
-            vec![TokenKind::Integer(8), TokenKind::Slash, TokenKind::Integer(2)]
+            vec![
+                TokenKind::Integer(8),
+                TokenKind::Slash,
+                TokenKind::Integer(2)
+            ]
         );
     }
 
