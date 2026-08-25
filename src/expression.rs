@@ -1,6 +1,10 @@
 #[derive(Debug, PartialEq)]
 enum Token {
     Integer(u64),
+    Identifier(String),
+    Let,
+    Equals,
+    Semicolon,
     Plus,
     Minus,
     Star,
@@ -33,7 +37,14 @@ impl<'a> Lexer<'a> {
                 continue;
             }
 
+            if character.is_ascii_alphabetic() || character == '_' {
+                tokens.push(self.identifier());
+                continue;
+            }
+
             let token = match character {
+                '=' => Token::Equals,
+                ';' => Token::Semicolon,
                 '+' => Token::Plus,
                 '-' => Token::Minus,
                 '*' => Token::Star,
@@ -68,6 +79,24 @@ impl<'a> Lexer<'a> {
         Ok(Token::Integer(value))
     }
 
+    fn identifier(&mut self) -> Token {
+        let start = self.position;
+
+        while let Some(character) = self.current_character() {
+            if !character.is_ascii_alphanumeric() && character != '_' {
+                break;
+            }
+            self.advance();
+        }
+
+        let name = &self.input[start..self.position];
+        if name == "let" {
+            Token::Let
+        } else {
+            Token::Identifier(name.to_owned())
+        }
+    }
+
     fn current_character(&self) -> Option<char> {
         self.input[self.position..].chars().next()
     }
@@ -90,12 +119,25 @@ enum BinaryOperator {
 #[derive(Debug, PartialEq)]
 enum Expression {
     Literal(u64),
+    Variable(String),
     UnaryNegation(Box<Expression>),
     Binary {
         operator: BinaryOperator,
         left: Box<Expression>,
         right: Box<Expression>,
     },
+}
+
+#[derive(Debug, PartialEq)]
+struct Declaration {
+    name: String,
+    initializer: Expression,
+}
+
+#[derive(Debug, PartialEq)]
+struct Program {
+    declarations: Vec<Declaration>,
+    expression: Expression,
 }
 
 struct Parser<'a> {
@@ -111,9 +153,42 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse(mut self) -> Result<Expression, String> {
-        if self.tokens.is_empty() {
-            return Err("expression is empty".to_owned());
+    fn parse(mut self) -> Result<Program, String> {
+        let mut declarations = Vec::new();
+
+        while matches!(self.peek(), Some(Token::Let)) {
+            self.advance();
+
+            let name = match self.advance() {
+                Some(Token::Identifier(name)) => name.to_owned(),
+                _ => return Err("expected a variable name after 'let'".to_owned()),
+            };
+
+            if !matches!(self.advance(), Some(Token::Equals)) {
+                return Err(format!("expected '=' after variable name '{name}'"));
+            }
+
+            let initializer = self.parse_additive()?;
+
+            if !matches!(self.advance(), Some(Token::Semicolon)) {
+                return Err(format!("expected ';' after declaration of '{name}'"));
+            }
+
+            if declarations
+                .iter()
+                .any(|declaration: &Declaration| declaration.name == name)
+            {
+                return Err(format!("duplicate variable declaration: '{name}'"));
+            }
+
+            declarations.push(Declaration { name, initializer });
+        }
+
+        if self.tokens.is_empty() || self.peek().is_none() {
+            if declarations.is_empty() {
+                return Err("expression is empty".to_owned());
+            }
+            return Err("expected a final expression after declarations".to_owned());
         }
 
         let expression = self.parse_additive()?;
@@ -125,7 +200,10 @@ impl<'a> Parser<'a> {
             return Err(format!("unexpected trailing token: {}", token.name()));
         }
 
-        Ok(expression)
+        Ok(Program {
+            declarations,
+            expression,
+        })
     }
 
     fn parse_additive(&mut self) -> Result<Expression, String> {
@@ -183,6 +261,7 @@ impl<'a> Parser<'a> {
     fn parse_primary(&mut self) -> Result<Expression, String> {
         match self.advance() {
             Some(Token::Integer(value)) => Ok(Expression::Literal(*value)),
+            Some(Token::Identifier(name)) => Ok(Expression::Variable(name.to_owned())),
             Some(Token::LeftParen) => {
                 let expression = self.parse_additive()?;
                 match self.advance() {
@@ -191,7 +270,13 @@ impl<'a> Parser<'a> {
                 }
             }
             Some(Token::RightParen) => Err("unexpected ')'".to_owned()),
-            Some(Token::Plus) | Some(Token::Minus) | Some(Token::Star) | Some(Token::Slash) => {
+            Some(Token::Let)
+            | Some(Token::Equals)
+            | Some(Token::Semicolon)
+            | Some(Token::Plus)
+            | Some(Token::Minus)
+            | Some(Token::Star)
+            | Some(Token::Slash) => {
                 Err("expected an expression".to_owned())
             }
             None => Err("expected an expression".to_owned()),
@@ -215,6 +300,10 @@ impl Token {
     fn name(&self) -> &'static str {
         match self {
             Self::Integer(_) => "integer literal",
+            Self::Identifier(_) => "identifier",
+            Self::Let => "'let'",
+            Self::Equals => "'='",
+            Self::Semicolon => "';'",
             Self::Plus => "'+'",
             Self::Minus => "'-'",
             Self::Star => "'*'",
@@ -225,11 +314,18 @@ impl Token {
     }
 }
 
-fn evaluate_expression(expression: &Expression) -> Result<i64, String> {
+fn evaluate_expression(
+    expression: &Expression,
+    variables: &std::collections::HashMap<String, i64>,
+) -> Result<i64, String> {
     match expression {
         Expression::Literal(value) => {
             i64::try_from(*value).map_err(|_| "integer literal out of range".to_owned())
         }
+        Expression::Variable(name) => variables
+            .get(name)
+            .copied()
+            .ok_or_else(|| format!("undefined variable: '{name}'")),
         Expression::UnaryNegation(operand) => {
             if let Expression::Literal(value) = operand.as_ref() {
                 if *value == (i64::MAX as u64) + 1 {
@@ -237,7 +333,7 @@ fn evaluate_expression(expression: &Expression) -> Result<i64, String> {
                 }
             }
 
-            evaluate_expression(operand)?
+            evaluate_expression(operand, variables)?
                 .checked_neg()
                 .ok_or_else(|| "integer negation overflow".to_owned())
         }
@@ -246,8 +342,8 @@ fn evaluate_expression(expression: &Expression) -> Result<i64, String> {
             left,
             right,
         } => {
-            let left = evaluate_expression(left)?;
-            let right = evaluate_expression(right)?;
+            let left = evaluate_expression(left, variables)?;
+            let right = evaluate_expression(right, variables)?;
 
             match operator {
                 BinaryOperator::Add => left
@@ -274,8 +370,15 @@ fn evaluate_expression(expression: &Expression) -> Result<i64, String> {
 
 pub(super) fn evaluate(input: &str) -> Result<i64, String> {
     let tokens = Lexer::new(input).tokenize()?;
-    let expression = Parser::new(&tokens).parse()?;
-    evaluate_expression(&expression)
+    let program = Parser::new(&tokens).parse()?;
+    let mut variables = std::collections::HashMap::new();
+
+    for declaration in &program.declarations {
+        let value = evaluate_expression(&declaration.initializer, &variables)?;
+        variables.insert(declaration.name.clone(), value);
+    }
+
+    evaluate_expression(&program.expression, &variables)
 }
 
 #[cfg(test)]
@@ -449,6 +552,91 @@ mod tests {
         assert_eq!(
             evaluate("-9223372036854775808 / -1"),
             Err("integer division overflow".to_owned())
+        );
+    }
+
+    #[test]
+    fn evaluates_immutable_variables() {
+        assert_eq!(
+            evaluate("let rate = 20; let quantity = 5; rate * quantity"),
+            Ok(100)
+        );
+    }
+
+    #[test]
+    fn declaration_initializers_see_only_previous_bindings() {
+        assert_eq!(
+            evaluate("let first = 2; let second = first + 3; second * 4"),
+            Ok(20)
+        );
+    }
+
+    #[test]
+    fn supports_identifiers_with_digits_and_underscores() {
+        assert_eq!(evaluate("let _value2 = 7; _value2"), Ok(7));
+    }
+
+    #[test]
+    fn rejects_undefined_variables() {
+        assert_eq!(
+            evaluate("missing + 1"),
+            Err("undefined variable: 'missing'".to_owned())
+        );
+    }
+
+    #[test]
+    fn rejects_forward_references() {
+        assert_eq!(
+            evaluate("let first = second; let second = 2; first"),
+            Err("undefined variable: 'second'".to_owned())
+        );
+    }
+
+    #[test]
+    fn rejects_duplicate_variables() {
+        assert_eq!(
+            evaluate("let value = 1; let value = 2; value"),
+            Err("duplicate variable declaration: 'value'".to_owned())
+        );
+    }
+
+    #[test]
+    fn rejects_missing_declaration_parts() {
+        assert_eq!(
+            evaluate("let value 1; value"),
+            Err("expected '=' after variable name 'value'".to_owned())
+        );
+        assert_eq!(
+            evaluate("let value = 1 value"),
+            Err("expected ';' after declaration of 'value'".to_owned())
+        );
+        assert_eq!(
+            evaluate("let = 1; 1"),
+            Err("expected a variable name after 'let'".to_owned())
+        );
+    }
+
+    #[test]
+    fn rejects_programs_without_a_final_expression() {
+        assert_eq!(
+            evaluate("let value = 1;"),
+            Err("expected a final expression after declarations".to_owned())
+        );
+    }
+
+    #[test]
+    fn rejects_trailing_semicolons() {
+        assert_eq!(
+            evaluate("let value = 1; value;"),
+            Err("unexpected trailing token: ';'".to_owned())
+        );
+    }
+
+    #[test]
+    fn keeps_let_reserved() {
+        assert_eq!(
+            evaluate("let + 1"),
+            Err("expected a variable name after 'let'".to_owned())
         );
     }
 }

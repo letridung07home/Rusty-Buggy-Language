@@ -17,12 +17,30 @@ fn evaluates_expression_and_prints_result_to_stdout() {
 }
 
 #[test]
+fn evaluates_program_with_immutable_variables() {
+    let output = run_cli(&["let rate = 20; let quantity = 5; rate * quantity"]);
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"100\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
 fn reports_invalid_expression_on_stderr_without_stdout() {
     let output = run_cli(&["8 / (3 - 3)"]);
 
     assert!(!output.status.success());
     assert!(output.stdout.is_empty());
     assert_eq!(output.stderr, b"error: division by zero\n");
+}
+
+#[test]
+fn reports_undefined_variable_on_stderr_without_stdout() {
+    let output = run_cli(&["let result = missing + 1; result"]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(output.stderr, b"error: undefined variable: 'missing'\n");
 }
 
 #[test]
@@ -44,7 +62,7 @@ fn prints_help_for_short_flag() {
     assert!(output.status.success());
     assert_eq!(
         output.stdout,
-        b"Usage: rusty-buggy-language \"<expression>\"\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n\nEvaluates an i64 integer expression with +, -, *, /, parentheses, and prefix -.\n"
+        b"Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n\nEvaluates an i64 integer program with immutable let bindings, +, -, *, /, parentheses, and prefix -.\n"
     );
     assert!(output.stderr.is_empty());
 }
@@ -56,7 +74,7 @@ fn prints_help_for_long_flag() {
     assert!(output.status.success());
     assert_eq!(
         output.stdout,
-        b"Usage: rusty-buggy-language \"<expression>\"\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n\nEvaluates an i64 integer expression with +, -, *, /, parentheses, and prefix -.\n"
+        b"Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n\nEvaluates an i64 integer program with immutable let bindings, +, -, *, /, parentheses, and prefix -.\n"
     );
     assert!(output.stderr.is_empty());
 }
@@ -78,7 +96,7 @@ fn prints_version_for_short_flag() {
     let output = run_cli(&["-V"]);
 
     assert!(output.status.success());
-    assert_eq!(output.stdout, b"rusty-buggy-language 0.4.0\n");
+    assert_eq!(output.stdout, b"rusty-buggy-language 0.5.0\n");
     assert!(output.stderr.is_empty());
 }
 
@@ -87,7 +105,7 @@ fn prints_version_for_long_flag() {
     let output = run_cli(&["--version"]);
 
     assert!(output.status.success());
-    assert_eq!(output.stdout, b"rusty-buggy-language 0.4.0\n");
+    assert_eq!(output.stdout, b"rusty-buggy-language 0.5.0\n");
     assert!(output.stderr.is_empty());
 }
 

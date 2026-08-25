@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-25
+
+### Added
+
+- Added immutable integer variables with `let` declarations and sequential
+  program evaluation.
+
 ## [0.4.0] - 2026-08-25
 
 ### Added
