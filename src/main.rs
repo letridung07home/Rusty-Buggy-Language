@@ -49,7 +49,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::run;
+    use super::{run, Output};
     use std::ffi::OsString;
 
     fn arguments(arguments: &[&str]) -> Vec<OsString> {
