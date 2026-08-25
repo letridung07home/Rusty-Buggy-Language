@@ -50,14 +50,9 @@ impl<'a> Lexer<'a> {
 
             let token = match character {
                 '=' => self.operator_with_optional_equals(Token::Equals, Token::EqualEqual),
-                '<' => self.operator_with_optional_equals(
-                    Token::LessThan,
-                    Token::LessThanOrEqual,
-                ),
-                '>' => self.operator_with_optional_equals(
-                    Token::GreaterThan,
-                    Token::GreaterThanOrEqual,
-                ),
+                '<' => self.operator_with_optional_equals(Token::LessThan, Token::LessThanOrEqual),
+                '>' => self
+                    .operator_with_optional_equals(Token::GreaterThan, Token::GreaterThanOrEqual),
                 '!' => {
                     self.advance();
                     if self.current_character() == Some('=') {
@@ -582,8 +577,14 @@ mod tests {
             evaluate("1 = 2"),
             Err("unexpected trailing token: '='".to_owned())
         );
-        assert_eq!(evaluate("1 < = 2"), Err("expected an expression".to_owned()));
-        assert_eq!(evaluate("1 > = 2"), Err("expected an expression".to_owned()));
+        assert_eq!(
+            evaluate("1 < = 2"),
+            Err("expected an expression".to_owned())
+        );
+        assert_eq!(
+            evaluate("1 > = 2"),
+            Err("expected an expression".to_owned())
+        );
     }
 
     #[test]
