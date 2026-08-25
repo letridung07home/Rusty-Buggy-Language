@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 description = "A programming language written in Rust for AI coding agents"
 readme = "README.md"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/letridung07home/Rusty-Buggy-Language"
 keywords = ["language", "programming-language", "rust", "ai-agents"]
 

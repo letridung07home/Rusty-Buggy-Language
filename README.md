@@ -22,4 +22,5 @@ the matching entry in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-This project is licensed under the MIT License.
+This project is dual-licensed under either the [MIT License](LICENSE-MIT) or
+the [Apache License, Version 2.0](LICENSE-APACHE), at your option.
