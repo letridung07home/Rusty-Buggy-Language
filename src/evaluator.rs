@@ -2,8 +2,6 @@ use std::collections::HashMap;
 
 use crate::ast::{BinaryOperator, Expression, Program};
 use crate::error::Error;
-use crate::lexer::Lexer;
-use crate::parser::Parser;
 
 pub(crate) fn evaluate(program: &Program) -> Result<i64, Error> {
     let mut variables = HashMap::new();
