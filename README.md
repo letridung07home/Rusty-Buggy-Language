@@ -7,10 +7,11 @@ The command-line evaluator accepts an inline program, a UTF-8 source file, or
 UTF-8 standard input. Each program contains zero or more sequential, immutable
 `let` declarations followed by one final integer expression. It supports ASCII
 decimal integer literals, identifiers, parentheses, prefix `-`, the comparison
-operators `<`, `<=`, `>`, `>=`, `==`, and `!=`, and the arithmetic operators `+`,
-`-`, `*`, and `/` with checked signed 64-bit arithmetic. Comparisons produce
-integer `1` for true and `0` for false, so their results can be stored in
-variables or used in later arithmetic.
+operators `<`, `<=`, `>`, `>=`, `==`, and `!=`, the arithmetic operators `+`,
+`-`, `*`, and `/` with checked signed 64-bit arithmetic, and `//` line comments
+and `/* */` block comments. Comparisons produce integer `1` for true and `0`
+for false, so their results can be stored in variables or used in later
+arithmetic.
 
 For the complete grammar, evaluation rules, operator precedence, CLI behavior,
 and error conditions, see the [language reference](docs/language.md). The
@@ -33,6 +34,9 @@ cargo run -- "let rate = 20; let quantity = 5; rate * quantity"
 
 cargo run -- "let ready = 3 >= 2; ready * 10"
 # 10
+
+cargo run -- "1 /* group */ + 2 * 3 // note"
+# 7
 
 cargo run -- --file program.rbl
 

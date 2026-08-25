@@ -61,8 +61,11 @@ input reports a clear error instead of exhausting memory or the call stack.
 ## Grammar
 
 The grammar below uses `*` for zero or more repetitions and `+` for one or
-more. Whitespace may appear between tokens and is ignored. There are no
-comments or alternate literal formats.
+more. Whitespace may appear between tokens and is ignored. `//` line comments
+run from `//` to the end of the line, and `/* */` block comments run to their
+first closing `*/`; both are stripped by the lexer and never affect
+evaluation. Block comments do not nest. There are no alternate literal
+formats.
 
 ```text
 program        ::= declaration* expression
@@ -157,6 +160,7 @@ standard error, prints no result, and exits unsuccessfully. Errors include:
 - an empty expression, malformed declarations, or a missing final expression;
 - unexpected characters, standalone `!` or `=`, unsupported unary `+`,
   unmatched parentheses, chained comparisons, or trailing input;
+- an unterminated block comment;
 - integer literals outside the supported range;
 - undefined or forward-referenced variables and duplicate declarations;
 - arithmetic overflow, including negating the minimum integer or dividing it

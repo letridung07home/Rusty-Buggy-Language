@@ -113,4 +113,35 @@ mod tests {
             Ok(28)
         );
     }
+
+    #[test]
+    fn comments_are_stripped_before_evaluation() {
+        assert_eq!(evaluate("1 /* part */ + 2 // note"), Ok(3));
+        assert_eq!(evaluate("let rate = 20; // per hour\nrate * 5"), Ok(100));
+        assert_eq!(evaluate("let a = 1; /* multi\nline */ a + 1"), Ok(2));
+    }
+
+    #[test]
+    fn comments_do_not_shift_error_positions() {
+        // The '/' operator sits at line 3, column 4 of the commented program.
+        let error = evaluate("1 + 2\n// note\n 8 / (3 - 3)").unwrap_err();
+
+        assert_eq!(error.to_string(), "division by zero");
+        assert_eq!(
+            error.position(),
+            Some(super::SourcePosition { line: 3, column: 4 })
+        );
+    }
+
+    #[test]
+    fn a_comment_only_program_is_empty() {
+        assert_eq!(
+            evaluate("// just a comment").unwrap_err().to_string(),
+            "expression is empty"
+        );
+        assert_eq!(
+            evaluate("/* nothing else */").unwrap_err().to_string(),
+            "expression is empty"
+        );
+    }
 }

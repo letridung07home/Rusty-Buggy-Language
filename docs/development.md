@@ -89,11 +89,15 @@ When adding a syntactic feature, consider each stage explicitly:
 5. Add unit and CLI coverage for successful use, invalid syntax, and relevant
    error paths.
 
+Comments are handled entirely by the lexer: `//` and `/* ... */` sequences
+are recognized and stripped while the token stream is produced, so they never
+reach the parser, AST, or evaluator. Their behavior belongs in the language
+reference rather than the grammar.
+
 Keep the language intentionally narrow unless a feature has a clear benefit
-for AI coding agents. Comments, floating-point values, unary plus, and
-arbitrary-precision integers are not currently supported; adding any of them
-requires a deliberate specification update rather than a documentation-only
-change. File and standard-input handling belongs to the CLI adapter and must
+for AI coding agents. Floating-point values, unary plus, and arbitrary-
+precision integers are not currently supported; adding any of them requires a
+deliberate specification update rather than a documentation-only change. File and standard-input handling belongs to the CLI adapter and must
 not change the public `evaluate(&str) -> Result<i64, Error>` API.
 
 ## Compatibility and verification

@@ -43,7 +43,7 @@ updates the language reference and changelog on completion.
 
 **Agent-friendly language additions (backward compatible)**
 
-- [ ] Add `//` line comments and `/* */` block comments, stripped by the
+- [x] Add `//` line comments and `/* */` block comments, stripped by the
   lexer so they never affect evaluation.
 - [ ] Add the modulo operator `%` with the same checked semantics as `/`
   (truncating toward zero, with division-by-zero and overflow errors).
