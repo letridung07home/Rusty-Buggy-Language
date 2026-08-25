@@ -263,15 +263,35 @@ fn reports_invalid_utf8_standard_input_with_source_context() {
     );
 }
 
+fn expected_help() -> String {
+    format!(
+        "{}",
+        concat!(
+            "Usage: rusty-buggy-language \"<program>\"\n",
+            "       rusty-buggy-language -f <path> | --file <path>\n",
+            "       rusty-buggy-language --stdin\n",
+            "       rusty-buggy-language -h | --help\n",
+            "       rusty-buggy-language -V | --version\n",
+            "       rusty-buggy-language [--positions] [--input-limit <bytes>] <program>\n",
+            "       rusty-buggy-language [--positions] [--input-limit <bytes>] -f <path> | --file <path>\n",
+            "       rusty-buggy-language [--positions] [--input-limit <bytes>] --stdin\n",
+            "\n",
+            "Evaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, parentheses, and prefix -.\n",
+            "\n",
+            "The program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input. Source modes are mutually exclusive.\n",
+            "\n",
+            "--positions      Also report the line and column of evaluation or syntax errors.\n",
+            "--input-limit N  Reject programs longer than N bytes before evaluation.\n",
+        )
+    )
+}
+
 #[test]
 fn prints_help_for_short_flag() {
     let output = run_cli(&["-h"]);
 
     assert!(output.status.success());
-    assert_eq!(
-        output.stdout,
-        b"Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -f <path> | --file <path>\n       rusty-buggy-language --stdin\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n\nEvaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, parentheses, and prefix -.\n\nThe program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input.\n"
-    );
+    assert_eq!(output.stdout, expected_help().as_bytes());
     assert!(output.stderr.is_empty());
 }
 
@@ -280,10 +300,7 @@ fn prints_help_for_long_flag() {
     let output = run_cli(&["--help"]);
 
     assert!(output.status.success());
-    assert_eq!(
-        output.stdout,
-        b"Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -f <path> | --file <path>\n       rusty-buggy-language --stdin\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n\nEvaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, parentheses, and prefix -.\n\nThe program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input.\n"
-    );
+    assert_eq!(output.stdout, expected_help().as_bytes());
     assert!(output.stderr.is_empty());
 }
 
@@ -340,5 +357,103 @@ fn rejects_long_version_flag_with_extra_arguments() {
     assert_eq!(
         output.stderr,
         b"error: expected exactly one expression argument\n"
+    );
+}
+
+#[test]
+fn positions_flag_keeps_default_output_for_successful_programs() {
+    let output = run_cli(&["--positions", "1 + 2"]);
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"3\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn positions_flag_reports_line_and_column_for_evaluation_errors() {
+    let output = run_cli(&["--positions", "8 / (3 - 3)"]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        output.stderr,
+        b"error: division by zero\n at line 1, column 3\n"
+    );
+}
+
+#[test]
+fn without_positions_error_output_is_unchanged() {
+    let output = run_cli(&["8 / (3 - 3)"]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(output.stderr, b"error: division by zero\n");
+}
+
+#[test]
+fn positions_flag_reports_line_and_column_after_newlines() {
+    let output = run_cli(&["--positions", "let x = 1;\n missing + 1"]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        output.stderr,
+        b"error: undefined variable: 'missing'\n at line 2, column 2\n"
+    );
+}
+
+#[test]
+fn input_limit_flag_rejects_oversized_inline_programs() {
+    let output = run_cli(&["--input-limit", "5", "1 + 2 + 3"]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        output.stderr,
+        b"error: program is too large to evaluate\n"
+    );
+}
+
+#[test]
+fn input_limit_flag_accepts_programs_at_the_limit() {
+    // "1 + 2 + 3" is exactly 9 bytes.
+    let output = run_cli(&["--input-limit", "9", "1 + 2 + 3"]);
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"6\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn input_limit_flag_rejects_non_numeric_values() {
+    let output = run_cli(&["--input-limit", "lots", "1"]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        output.stderr,
+        b"error: invalid --input-limit value: 'lots'\n"
+    );
+}
+
+#[test]
+fn positions_and_input_limit_flags_can_be_combined() {
+    let output = run_cli(&["--positions", "--input-limit", "5", "1 + 2"]);
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"3\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn input_limit_flag_applies_to_file_sources() {
+    let source = TemporarySource::new(b"1 + 2 + 3");
+    let output = run_cli(&["--input-limit", "5", "--file", source.as_str()]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        output.stderr,
+        b"error: program is too large to evaluate\n"
     );
 }

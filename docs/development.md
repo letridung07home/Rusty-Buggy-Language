@@ -36,15 +36,25 @@ private CLI adapter <- process startup
 source selection and complete UTF-8 input read
 ```
 
-- `src/lib.rs` owns the public library boundary and orchestration. Its sole
-  public function is `evaluate(program: &str) -> Result<i64, Error>`, and its
-  sole public type is the opaque `Error`, which preserves the existing
-  user-facing message through `Display` and `std::error::Error`.
+- `src/lib.rs` owns the public library boundary and orchestration. Its primary
+  public function is `evaluate(program: &str) -> Result<i64, Error>`, with
+  `evaluate_with_limits(program, &Limits)` exposing the configurable input-size
+  bound. `evaluate` uses `Limits::default()`. Public types are `Error`, the
+  opaque error whose `Display` preserves the existing user-facing message, and
+  `SourcePosition`, exposed through `Error::position()`.
 - `src/ast.rs`, `src/lexer.rs`, `src/parser.rs`, `src/evaluator.rs`, and
   `src/error.rs` are flat, private implementation modules. The lexer turns
-  text into tokens; the recursive-descent parser builds declarations and
-  expressions according to precedence; and the evaluator resolves immutable
-  variables and performs checked `i64` arithmetic.
+  text into position-tagged tokens; the recursive-descent parser builds
+  declarations and expressions according to precedence and stamps each AST
+  node with the source position of its first token; and the evaluator resolves
+  immutable variables and performs checked `i64` arithmetic, attaching the
+  relevant node's position to evaluation errors.
+- Resource limits live on the parser and the library entry point. The parser
+  bounds recursive nesting (parentheses and prefix `-` chains) with a `depth`
+  counter, reporting `program too deeply nested`; the library entry points
+  enforce the byte-length input limit from `Limits` before lexing. Positions
+  are always tracked internally, but CLI output only shows them when the
+  `--positions` flag is passed, keeping the default error text stable.
 - `src/cli.rs` is a private executable adapter for source-mode selection,
   complete UTF-8 reads from files or standard input, argument validation, help
   and version flags, standard-output/error behavior, and exit status. It passes

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added source positions (line and column) to evaluation and syntax errors,
+  tracked through the lexer and parser. Error messages are unchanged; the
+  library exposes the position through `Error::position()`, and the CLI
+  reports it with the opt-in `--positions` flag.
+- Added a parser nesting-depth limit that rejects programs nested more deeply
+  than 256 levels with `program too deeply nested` instead of overflowing the
+  stack on adversarial input.
+- Added a configurable input-size limit. The library gains
+  `evaluate_with_limits(&str, &Limits)` alongside the unchanged `evaluate`,
+  and the CLI gains an `--input-limit <bytes>` flag. Programs longer than the
+  limit are rejected before parsing.
+
 ### Changed
 
 - Restructured the roadmap into the v1.x series with concrete development
