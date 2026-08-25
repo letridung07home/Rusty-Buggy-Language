@@ -358,17 +358,11 @@ mod tests {
 
     #[test]
     fn rejects_division_by_zero() {
-        assert_eq!(
-            evaluate("8 / (3 - 3)"),
-            Err("division by zero".to_owned())
-        );
+        assert_eq!(evaluate("8 / (3 - 3)"), Err("division by zero".to_owned()));
     }
 
     #[test]
     fn unary_negation_is_not_supported() {
-        assert_eq!(
-            evaluate("-1"),
-            Err("expected an expression".to_owned())
-        );
+        assert_eq!(evaluate("-1"), Err("expected an expression".to_owned()));
     }
 }
