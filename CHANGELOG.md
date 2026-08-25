@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   panic, or hang. The workflow can also be triggered manually with a
   configurable run duration (default 1 minute).
 
+### Changed
+
+- Upgraded `actions/upload-artifact` to v7 and `actions/download-artifact` to
+  v8 in the release workflow, matching the current artifact backend.
+
 ### Removed
 
 - Removed the bounded fuzz-smoke CI job from push and pull-request runs;

@@ -40,7 +40,7 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rusty-buggy-language-${{ matrix.target }}
           path: target/${{ matrix.target }}/release/rusty-buggy-language${{ matrix.suffix }}
@@ -122,8 +122,10 @@ jobs:
               "$SERVER_URL" "$REPOSITORY" "$previous_tag" "$TAG_NAME" >> RELEASE_NOTES.md
           fi
 
+      # v8 is the current downloader major and is required to read artifacts
+      # uploaded by upload-artifact v5+ (the artifact backend changed there).
       - name: Download prebuilt binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
