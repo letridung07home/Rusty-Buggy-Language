@@ -3,6 +3,12 @@
 A programming language written in Rust, designed to help AI coding agents work
 more effectively.
 
+## v0.4.0 scope
+
+The command-line evaluator reports `rusty-buggy-language 0.4.0` when passed
+`-V` or `--version` as its only argument. These flags cannot be combined with
+an expression or any other argument.
+
 ## v0.3.0 scope
 
 The language evaluates one integer expression passed as the executable's only
@@ -24,8 +30,13 @@ cargo run -- "-(1 + 2) * -3"
 
 cargo run -- --help
 # Usage: rusty-buggy-language "<expression>"
+#        rusty-buggy-language -h | --help
+#        rusty-buggy-language -V | --version
 #
 # Evaluates an i64 integer expression with +, -, *, /, parentheses, and prefix -.
+
+cargo run -- --version
+# rusty-buggy-language 0.4.0
 ```
 
 The expression may contain ASCII decimal integer literals, whitespace, binary
