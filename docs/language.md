@@ -33,7 +33,9 @@ comments or alternate literal formats.
 ```text
 program        ::= declaration* expression
 declaration    ::= "let" identifier "=" expression ";"
-expression     ::= additive
+expression     ::= comparison
+comparison     ::= additive (comparison_operator additive)?
+comparison_operator ::= "<" | "<=" | ">" | ">=" | "==" | "!="
 additive       ::= multiplicative (("+" | "-") multiplicative)*
 multiplicative ::= unary (("*" | "/") unary)*
 unary          ::= "-" unary | primary
@@ -75,6 +77,20 @@ literal `-9223372036854775808` is accepted, while its unnegated magnitude is
 not a valid value. Other out-of-range literal magnitudes are rejected. Unary
 `+` is not supported.
 
+Each comparison evaluates to the integer `1` when it is true and `0` when it is
+false. These comparison values can be assigned by `let` declarations and used
+as operands in later arithmetic:
+
+```text
+let ready = 3 >= 2;
+ready * 10
+```
+
+This program evaluates to `10`.
+
+The standalone `!` and `=` tokens are not comparison operators. Use `!=` for
+inequality, `==` for equality, and a single `=` only in a `let` declaration.
+
 ## Operator precedence
 
 Operators on the same row associate as shown, and parentheses can override the
@@ -83,11 +99,18 @@ default order:
 | Precedence | Operators | Associativity |
 | ---: | --- | --- |
 | Highest | prefix `-` | right-to-left |
-| 2 | `*`, `/` | left-to-right |
-| Lowest | `+`, `-` | left-to-right |
+| 3 | `*`, `/` | left-to-right |
+| 2 | `+`, `-` | left-to-right |
+| Lowest | `<`, `<=`, `>`, `>=`, `==`, `!=` | at most one per expression level |
 
 For example, `-2 * 3 + 4` evaluates as `((-2) * 3) + 4`, while `10 - 3 - 2`
-evaluates as `(10 - 3) - 2`.
+evaluates as `(10 - 3) - 2`. Arithmetic binds more tightly than comparisons,
+so `1 + 2 < 4 * 2` evaluates as `(1 + 2) < (4 * 2)`.
+
+An expression level may contain at most one comparison operator. Chained or
+mixed comparisons such as `1 < 2 < 3` and `1 < 2 == 1` are rejected. Use
+parentheses to make separate comparisons explicit, as in
+`(1 < 2) == (2 < 3)`.
 
 ## Errors
 
@@ -97,8 +120,8 @@ standard error, prints no result, and exits unsuccessfully. Errors include:
 - missing or extra command-line arguments;
 - an argument that is not valid UTF-8;
 - an empty expression, malformed declarations, or a missing final expression;
-- unexpected characters, unsupported unary `+`, unmatched parentheses, or
-  trailing input;
+- unexpected characters, standalone `!` or `=`, unsupported unary `+`,
+  unmatched parentheses, chained comparisons, or trailing input;
 - integer literals outside the supported range;
 - undefined or forward-referenced variables and duplicate declarations;
 - arithmetic overflow, including negating the minimum integer or dividing it

@@ -4,6 +4,12 @@ enum Token {
     Identifier(String),
     Let,
     Equals,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
+    EqualEqual,
+    NotEqual,
     Semicolon,
     Plus,
     Minus,
@@ -43,21 +49,68 @@ impl<'a> Lexer<'a> {
             }
 
             let token = match character {
-                '=' => Token::Equals,
-                ';' => Token::Semicolon,
-                '+' => Token::Plus,
-                '-' => Token::Minus,
-                '*' => Token::Star,
-                '/' => Token::Slash,
-                '(' => Token::LeftParen,
-                ')' => Token::RightParen,
+                '=' => self.operator_with_optional_equals(Token::Equals, Token::EqualEqual),
+                '<' => self.operator_with_optional_equals(
+                    Token::LessThan,
+                    Token::LessThanOrEqual,
+                ),
+                '>' => self.operator_with_optional_equals(
+                    Token::GreaterThan,
+                    Token::GreaterThanOrEqual,
+                ),
+                '!' => {
+                    self.advance();
+                    if self.current_character() == Some('=') {
+                        self.advance();
+                        Token::NotEqual
+                    } else {
+                        return Err("unexpected character '!'".to_owned());
+                    }
+                }
+                ';' => {
+                    self.advance();
+                    Token::Semicolon
+                }
+                '+' => {
+                    self.advance();
+                    Token::Plus
+                }
+                '-' => {
+                    self.advance();
+                    Token::Minus
+                }
+                '*' => {
+                    self.advance();
+                    Token::Star
+                }
+                '/' => {
+                    self.advance();
+                    Token::Slash
+                }
+                '(' => {
+                    self.advance();
+                    Token::LeftParen
+                }
+                ')' => {
+                    self.advance();
+                    Token::RightParen
+                }
                 _ => return Err(format!("unexpected character '{character}'")),
             };
-            self.advance();
             tokens.push(token);
         }
 
         Ok(tokens)
+    }
+
+    fn operator_with_optional_equals(&mut self, single: Token, compound: Token) -> Token {
+        self.advance();
+        if self.current_character() == Some('=') {
+            self.advance();
+            compound
+        } else {
+            single
+        }
     }
 
     fn integer_literal(&mut self) -> Result<Token, String> {
@@ -114,6 +167,12 @@ enum BinaryOperator {
     Subtract,
     Multiply,
     Divide,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
+    Equal,
+    NotEqual,
 }
 
 #[derive(Debug, PartialEq)]
@@ -168,7 +227,7 @@ impl<'a> Parser<'a> {
                 return Err(format!("expected '=' after variable name '{name}'"));
             }
 
-            let initializer = self.parse_additive()?;
+            let initializer = self.parse_expression()?;
 
             if !matches!(self.advance(), Some(Token::Semicolon)) {
                 return Err(format!("expected ';' after declaration of '{name}'"));
@@ -191,7 +250,7 @@ impl<'a> Parser<'a> {
             return Err("expected a final expression after declarations".to_owned());
         }
 
-        let expression = self.parse_additive()?;
+        let expression = self.parse_expression()?;
 
         if let Some(token) = self.peek() {
             if *token == Token::RightParen {
@@ -204,6 +263,30 @@ impl<'a> Parser<'a> {
             declarations,
             expression,
         })
+    }
+
+    fn parse_expression(&mut self) -> Result<Expression, String> {
+        self.parse_comparison()
+    }
+
+    fn parse_comparison(&mut self) -> Result<Expression, String> {
+        let mut expression = self.parse_additive()?;
+
+        if let Some(operator) = self.comparison_operator() {
+            self.advance();
+            let right = self.parse_additive()?;
+            expression = Expression::Binary {
+                operator,
+                left: Box::new(expression),
+                right: Box::new(right),
+            };
+
+            if self.comparison_operator().is_some() {
+                return Err("comparison operators cannot be chained".to_owned());
+            }
+        }
+
+        Ok(expression)
     }
 
     fn parse_additive(&mut self) -> Result<Expression, String> {
@@ -263,7 +346,7 @@ impl<'a> Parser<'a> {
             Some(Token::Integer(value)) => Ok(Expression::Literal(*value)),
             Some(Token::Identifier(name)) => Ok(Expression::Variable(name.to_owned())),
             Some(Token::LeftParen) => {
-                let expression = self.parse_additive()?;
+                let expression = self.parse_expression()?;
                 match self.advance() {
                     Some(Token::RightParen) => Ok(expression),
                     _ => Err("unmatched '('".to_owned()),
@@ -272,6 +355,12 @@ impl<'a> Parser<'a> {
             Some(Token::RightParen) => Err("unexpected ')'".to_owned()),
             Some(Token::Let)
             | Some(Token::Equals)
+            | Some(Token::LessThan)
+            | Some(Token::LessThanOrEqual)
+            | Some(Token::GreaterThan)
+            | Some(Token::GreaterThanOrEqual)
+            | Some(Token::EqualEqual)
+            | Some(Token::NotEqual)
             | Some(Token::Semicolon)
             | Some(Token::Plus)
             | Some(Token::Minus)
@@ -292,6 +381,18 @@ impl<'a> Parser<'a> {
         }
         token
     }
+
+    fn comparison_operator(&self) -> Option<BinaryOperator> {
+        match self.peek() {
+            Some(Token::LessThan) => Some(BinaryOperator::LessThan),
+            Some(Token::LessThanOrEqual) => Some(BinaryOperator::LessThanOrEqual),
+            Some(Token::GreaterThan) => Some(BinaryOperator::GreaterThan),
+            Some(Token::GreaterThanOrEqual) => Some(BinaryOperator::GreaterThanOrEqual),
+            Some(Token::EqualEqual) => Some(BinaryOperator::Equal),
+            Some(Token::NotEqual) => Some(BinaryOperator::NotEqual),
+            _ => None,
+        }
+    }
 }
 
 impl Token {
@@ -301,6 +402,12 @@ impl Token {
             Self::Identifier(_) => "identifier",
             Self::Let => "'let'",
             Self::Equals => "'='",
+            Self::LessThan => "'<'",
+            Self::LessThanOrEqual => "'<='",
+            Self::GreaterThan => "'>'",
+            Self::GreaterThanOrEqual => "'>='",
+            Self::EqualEqual => "'=='",
+            Self::NotEqual => "'!='",
             Self::Semicolon => "';'",
             Self::Plus => "'+'",
             Self::Minus => "'-'",
@@ -361,6 +468,12 @@ fn evaluate_expression(
                             .ok_or_else(|| "integer division overflow".to_owned())
                     }
                 }
+                BinaryOperator::LessThan => Ok(if left < right { 1 } else { 0 }),
+                BinaryOperator::LessThanOrEqual => Ok(if left <= right { 1 } else { 0 }),
+                BinaryOperator::GreaterThan => Ok(if left > right { 1 } else { 0 }),
+                BinaryOperator::GreaterThanOrEqual => Ok(if left >= right { 1 } else { 0 }),
+                BinaryOperator::Equal => Ok(if left == right { 1 } else { 0 }),
+                BinaryOperator::NotEqual => Ok(if left != right { 1 } else { 0 }),
             }
         }
     }
@@ -386,6 +499,34 @@ mod tests {
     #[test]
     fn respects_operator_precedence() {
         assert_eq!(evaluate("1 + 2 * 3"), Ok(7));
+    }
+
+    #[test]
+    fn comparisons_return_one_or_zero() {
+        assert_eq!(evaluate("1 < 2"), Ok(1));
+        assert_eq!(evaluate("2 < 1"), Ok(0));
+        assert_eq!(evaluate("2 <= 2"), Ok(1));
+        assert_eq!(evaluate("3 <= 2"), Ok(0));
+        assert_eq!(evaluate("2 > 1"), Ok(1));
+        assert_eq!(evaluate("1 > 2"), Ok(0));
+        assert_eq!(evaluate("2 >= 2"), Ok(1));
+        assert_eq!(evaluate("1 >= 2"), Ok(0));
+        assert_eq!(evaluate("2 == 2"), Ok(1));
+        assert_eq!(evaluate("2 == 3"), Ok(0));
+        assert_eq!(evaluate("2 != 3"), Ok(1));
+        assert_eq!(evaluate("2 != 2"), Ok(0));
+    }
+
+    #[test]
+    fn comparisons_have_lower_precedence_than_arithmetic() {
+        assert_eq!(evaluate("1 + 2 < 2 * 2"), Ok(1));
+        assert_eq!(evaluate("10 - 3 >= 2 + 6"), Ok(0));
+    }
+
+    #[test]
+    fn comparisons_can_be_parenthesized() {
+        assert_eq!(evaluate("(1 < 2) == (2 < 3)"), Ok(1));
+        assert_eq!(evaluate("(1 + 2 < 4) * 5"), Ok(5));
     }
 
     #[test]
@@ -428,6 +569,32 @@ mod tests {
         assert_eq!(
             evaluate("1 + * 2"),
             Err("expected an expression".to_owned())
+        );
+    }
+
+    #[test]
+    fn rejects_standalone_comparison_punctuation() {
+        assert_eq!(
+            evaluate("1 ! 2"),
+            Err("unexpected character '!'".to_owned())
+        );
+        assert_eq!(
+            evaluate("1 = 2"),
+            Err("unexpected trailing token: '='".to_owned())
+        );
+        assert_eq!(evaluate("1 < = 2"), Err("expected an expression".to_owned()));
+        assert_eq!(evaluate("1 > = 2"), Err("expected an expression".to_owned()));
+    }
+
+    #[test]
+    fn rejects_chained_comparisons() {
+        assert_eq!(
+            evaluate("1 < 2 < 3"),
+            Err("comparison operators cannot be chained".to_owned())
+        );
+        assert_eq!(
+            evaluate("1 < 2 == 1"),
+            Err("comparison operators cannot be chained".to_owned())
         );
     }
 
@@ -567,6 +734,11 @@ mod tests {
             evaluate("let first = 2; let second = first + 3; second * 4"),
             Ok(20)
         );
+    }
+
+    #[test]
+    fn stores_comparison_values_in_variables() {
+        assert_eq!(evaluate("let ready = 3 >= 2; ready + 4"), Ok(5));
     }
 
     #[test]

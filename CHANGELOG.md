@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added integer comparison operators (`<`, `<=`, `>`, `>=`, `==`, and `!=`)
+  that evaluate to `1` or `0`.
+
 ## [0.5.2] - 2026-08-25
 
 ### Fixed

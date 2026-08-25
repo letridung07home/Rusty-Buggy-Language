@@ -26,6 +26,27 @@ fn evaluates_program_with_immutable_variables() {
 }
 
 #[test]
+fn evaluates_comparison_program_and_prints_integer_boolean_result() {
+    let output = run_cli(&["let ready = 3 >= 2; ready * 10"]);
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"10\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn rejects_chained_comparisons() {
+    let output = run_cli(&["1 < 2 < 3"]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        output.stderr,
+        b"error: comparison operators cannot be chained\n"
+    );
+}
+
+#[test]
 fn reports_invalid_expression_on_stderr_without_stdout() {
     let output = run_cli(&["8 / (3 - 3)"]);
 
@@ -62,7 +83,7 @@ fn prints_help_for_short_flag() {
     assert!(output.status.success());
     assert_eq!(
         output.stdout,
-        b"Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n\nEvaluates an i64 integer program with immutable let bindings, +, -, *, /, parentheses, and prefix -.\n"
+        b"Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n\nEvaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, parentheses, and prefix -.\n"
     );
     assert!(output.stderr.is_empty());
 }
@@ -74,7 +95,7 @@ fn prints_help_for_long_flag() {
     assert!(output.status.success());
     assert_eq!(
         output.stdout,
-        b"Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n\nEvaluates an i64 integer program with immutable let bindings, +, -, *, /, parentheses, and prefix -.\n"
+        b"Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n\nEvaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, parentheses, and prefix -.\n"
     );
     assert!(output.stderr.is_empty());
 }

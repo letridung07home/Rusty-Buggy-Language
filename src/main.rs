@@ -2,7 +2,7 @@ mod expression;
 
 use std::process::ExitCode;
 
-const HELP: &str = "Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n\nEvaluates an i64 integer program with immutable let bindings, +, -, *, /, parentheses, and prefix -.";
+const HELP: &str = "Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n\nEvaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, parentheses, and prefix -.";
 const VERSION: &str = concat!("rusty-buggy-language ", env!("CARGO_PKG_VERSION"));
 
 fn main() -> ExitCode {
