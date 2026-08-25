@@ -254,10 +254,7 @@ mod tests {
             parse_error("1 2"),
             "unexpected trailing token: integer literal"
         );
-        assert_eq!(
-            parse_error("1 = 2"),
-            "unexpected trailing token: '='"
-        );
+        assert_eq!(parse_error("1 = 2"), "unexpected trailing token: '='");
         assert_eq!(
             parse_error("let value = 1;"),
             "expected a final expression after declarations"
