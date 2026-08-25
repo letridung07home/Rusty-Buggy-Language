@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-08-25
+
+### Changed
+
+- Declared the core language, public `evaluate` library API, and CLI source
+  modes stable for the v1.0 contract.
+
 ## [0.9.0] - 2026-08-25
 
 ### Added
