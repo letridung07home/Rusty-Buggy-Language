@@ -275,26 +275,24 @@ fn reports_invalid_utf8_standard_input_with_source_context() {
 }
 
 fn expected_help() -> String {
-    format!(
-        "{}",
-        concat!(
-            "Usage: rusty-buggy-language \"<program>\"\n",
-            "       rusty-buggy-language -f <path> | --file <path>\n",
-            "       rusty-buggy-language --stdin\n",
-            "       rusty-buggy-language -h | --help\n",
-            "       rusty-buggy-language -V | --version\n",
-            "       rusty-buggy-language [--positions] [--input-limit <bytes>] <program>\n",
-            "       rusty-buggy-language [--positions] [--input-limit <bytes>] -f <path> | --file <path>\n",
-            "       rusty-buggy-language [--positions] [--input-limit <bytes>] --stdin\n",
-            "\n",
-            "Evaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, parentheses, and prefix -.\n",
-            "\n",
-            "The program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input. Source modes are mutually exclusive.\n",
-            "\n",
-            "--positions      Also report the line and column of evaluation or syntax errors.\n",
-            "--input-limit N  Reject programs longer than N bytes before evaluation.\n",
-        )
+    concat!(
+        "Usage: rusty-buggy-language \"<program>\"\n",
+        "       rusty-buggy-language -f <path> | --file <path>\n",
+        "       rusty-buggy-language --stdin\n",
+        "       rusty-buggy-language -h | --help\n",
+        "       rusty-buggy-language -V | --version\n",
+        "       rusty-buggy-language [--positions] [--input-limit <bytes>] <program>\n",
+        "       rusty-buggy-language [--positions] [--input-limit <bytes>] -f <path> | --file <path>\n",
+        "       rusty-buggy-language [--positions] [--input-limit <bytes>] --stdin\n",
+        "\n",
+        "Evaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, parentheses, and prefix -.\n",
+        "\n",
+        "The program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input. Source modes are mutually exclusive.\n",
+        "\n",
+        "--positions      Also report the line and column of evaluation or syntax errors.\n",
+        "--input-limit N  Reject programs longer than N bytes before evaluation.\n",
     )
+    .to_string()
 }
 
 #[test]
