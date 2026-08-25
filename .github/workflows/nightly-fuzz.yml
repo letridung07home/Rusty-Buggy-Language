@@ -1,0 +1,51 @@
+name: Nightly Fuzz
+
+on:
+  schedule:
+    # Deep, coverage-guided fuzzing against main every night at 03:00 UTC.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      duration_minutes:
+        description: Fuzz run duration in minutes (1-180)
+        required: false
+        default: 1
+        type: number
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: Coverage-guided fuzzing of the evaluate entry point
+    runs-on: ubuntu-latest
+    # Generous ceiling so manual runs can request up to 180 minutes plus
+    # toolchain install and build time.
+    timeout-minutes: 240
+    env:
+      # Scheduled runs keep the full nightly budget of 30 minutes; manual
+      # runs use the requested duration (default 1 minute for a quick check).
+      DURATION_MINUTES: ${{ github.event.inputs.duration_minutes || 30 }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      # libFuzzer's sanitizer coverage is only available on the nightly
+      # toolchain; the fuzz crate is excluded from the stable and MSRV CI jobs.
+      - name: Install nightly Rust
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: nightly
+
+      - name: Install cargo-fuzz 0.13.2
+        run: cargo install cargo-fuzz --version 0.13.2 --locked
+
+      # cargo-fuzz builds the target in release mode by default.
+      # `-max_total_time` bounds the whole run and `-timeout` bounds each
+      # individual input, so a hang fails the job instead of stalling it. A
+      # clean exit means no crash, panic, overflow, or hang was found in the
+      # window.
+      - name: Fuzz the evaluate entry point
+        run: cargo fuzz run evaluate -- -max_total_time=$(( DURATION_MINUTES * 60 )) -timeout=10 -print_final_stats=1
+        shell: bash

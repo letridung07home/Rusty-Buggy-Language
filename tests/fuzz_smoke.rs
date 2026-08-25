@@ -1,10 +1,10 @@
 //! A lightweight, dependency-free fuzzing harness over the public
 //! `evaluate` entry point.
 //!
-//! The test is `#[ignore]`d by default so the ordinary test suite stays fast;
-//! CI runs it explicitly under a time bound. Its sole job is to prove the
-//! evaluator never panics (and never hangs on the generated inputs), whether
-//! the input is a plausible program or arbitrary UTF-8.
+//! Its sole job is to prove the evaluator never panics (and never hangs on
+//! the generated inputs), whether the input is a plausible program or
+//! arbitrary UTF-8. A fast batch runs with the ordinary test suite; deep,
+//! coverage-guided fuzzing lives in the `fuzz/` crate and runs nightly.
 
 use rusty_buggy_language::evaluate;
 
@@ -100,15 +100,6 @@ fn source_of<'a>(index: usize, options: &[&'a str]) -> &'a str {
 
 fn prune_edge(prng: &mut Prng) -> &'static str {
     EDGE_PROGRAMS[prng.below(EDGE_PROGRAMS.len())]
-}
-
-/// Runs the harness for a fixed number of inputs. Marked `#[ignore]` so the
-/// normal test suite skips it; CI invokes it explicitly under a time bound.
-#[test]
-#[ignore = "long-running fuzz smoke; run explicitly in CI with a timeout"]
-fn evaluator_never_panics_on_fuzzed_input() {
-    const ITERATIONS: usize = 200_000;
-    fuzz_iterations(Prng::new(0xC0FFEE), ITERATIONS);
 }
 
 /// A fast regression run that always executes so the default test suite still

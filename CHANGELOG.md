@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Added a coverage-guided `cargo-fuzz` (libFuzzer) fuzz target over the
+  public `evaluate` entry point with a small committed seed corpus of
+  arithmetic edge cases, plus a nightly GitHub Actions workflow that fuzzes
+  it against `main` for 30 minutes and fails when the fuzzer finds a crash,
+  panic, or hang. The workflow can also be triggered manually with a
+  configurable run duration (default 1 minute).
+
+### Removed
+
+- Removed the bounded fuzz-smoke CI job from push and pull-request runs;
+  nightly coverage-guided fuzzing now owns deep fuzzing while the small
+  dependency-free fuzz batch still runs in the ordinary test suite.
+
 ## [1.4.0] - 2026-08-25
 
 ### Added

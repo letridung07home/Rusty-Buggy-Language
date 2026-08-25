@@ -70,11 +70,21 @@ source selection and complete UTF-8 input read
   `i64` arithmetic and ordered immutable `let` bindings.
 - `tests/fuzz_smoke.rs` is a dependency-free fuzzing harness over the public
   `evaluate` entry point (random token soup, pseudo-programs, arbitrary
-  UTF-8, and edge cases). The long-running test is `#[ignore]`d; CI runs it
-  for a bounded time under a shell `timeout`.
+  UTF-8, and edge cases), with a fast batch that runs inside the ordinary
+  test suite.
+- `fuzz/` holds a `cargo-fuzz` coverage-guided fuzz target over the public
+  `evaluate` entry point, with a small committed seed corpus of arithmetic
+  edge cases. It requires the nightly toolchain (libFuzzer sanitizer
+  coverage), so it runs in a dedicated nightly workflow rather than the
+  stable/MSRV suites.
 - `.github/workflows/ci.yml` checks formatting, compilation, tests, Clippy,
-  and Rust documentation on stable Rust, runs the bounded fuzz-smoke job, then
-  checks compilation and tests on the minimum supported Rust version.
+  and Rust documentation on stable Rust, then checks compilation and tests
+  on the minimum supported Rust version.
+  `.github/workflows/nightly-fuzz.yml` runs the coverage-guided `cargo-fuzz`
+  target against `main` for 30 minutes every night, failing when the fuzzer
+  finds a crash, panic, overflow, or hang. It can also be dispatched
+  manually with a configurable duration in minutes (default 1) for a quick
+  check.
   `.github/workflows/release.yml` creates releases from validated version tags,
   extracts their descriptions from `CHANGELOG.md`, and attaches prebuilt
   Linux, macOS, and Windows `x86_64` binaries built from the tag.
