@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a CI coverage job that measures line coverage with
   `cargo-llvm-cov` and fails when it drops below 80%, uploading the report
   to Codecov when a `CODECOV_TOKEN` secret is configured.
+- Added an actionlint CI job that lints the GitHub Actions workflow files
+  on every push and pull request, catching YAML, expression, and shell
+  errors before they can reach a release tag.
 - Added a coverage-guided `cargo-fuzz` (libFuzzer) fuzz target over the
   public `evaluate` entry point with a small committed seed corpus of
   arithmetic edge cases, plus a nightly GitHub Actions workflow that fuzzes

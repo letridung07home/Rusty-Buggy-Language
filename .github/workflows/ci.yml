@@ -90,6 +90,20 @@ jobs:
           files: lcov.info
           fail_ci_if_error: false
 
+  actionlint:
+    name: Lint workflow files
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Catches YAML, expression, and shell errors in workflow files at PR
+      # time instead of on a release tag, and annotates PRs via a problem
+      # matcher. Uses the actionlint release pinned inside the action.
+      - name: Run actionlint
+        uses: devops-actions/actionlint@ec02b36684b2f574f1d219ad0a43b082e46bf3e4 # v0.1.13
+
   msrv:
     name: Rust 1.70 compatibility
     runs-on: ubuntu-latest
