@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-08-25
+
+### Changed
+
+- Decoupled the Rust action revision from compiler selection and pinned the
+  action while keeping stable and MSRV toolchains explicit.
+- Split GitHub Actions Dependabot updates from grouped Cargo updates for
+  independent review.
+- Upgraded the release action to the supported Node 24 v3.0.2 runtime and
+  pinned it to its full commit SHA.
+
 ## [0.3.1] - 2026-08-25
 
 ### Added
