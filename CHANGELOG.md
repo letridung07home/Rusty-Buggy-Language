@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Restructured the roadmap to state the v1.0 goals explicitly and mark the
+  v1.0.0 milestone complete.
+
 ## [1.0.0] - 2026-08-25
 
 ### Changed
