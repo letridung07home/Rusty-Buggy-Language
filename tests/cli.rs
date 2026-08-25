@@ -32,6 +32,11 @@ fn run_cli_with_stdin(arguments: &[&str], input: &[u8]) -> Output {
             panic!("failed to write the CLI standard input: {write_error}");
         }
     }
+    // Dropping the handle closes the write end so the CLI observes EOF on its
+    // standard input; keeping it alive through `wait_with_output` would leave
+    // a child that reads stdin blocked forever waiting for input that never
+    // arrives.
+    drop(input_handle);
 
     child
         .wait_with_output()
