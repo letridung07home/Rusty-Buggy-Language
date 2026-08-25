@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed the release workflow dropping the macOS binary: each platform
+  artifact now downloads into its own subdirectory instead of being merged,
+  so the Linux and macOS binaries (which share the name `rusty-buggy-language`)
+  no longer overwrite each other in the uploaded release.
+
 ## [1.5.0] - 2026-08-26
 
 ### Added
