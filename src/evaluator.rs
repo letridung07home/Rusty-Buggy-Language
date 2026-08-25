@@ -246,10 +246,7 @@ mod tests {
         let error = evaluate_source("8 % (3 - 3)").unwrap_err();
         assert_eq!(
             error.position(),
-            Some(crate::error::SourcePosition {
-                line: 1,
-                column: 3
-            })
+            Some(crate::error::SourcePosition { line: 1, column: 3 })
         );
     }
 

@@ -260,7 +260,8 @@ impl<'a> Parser<'a> {
                 | TokenKind::Plus
                 | TokenKind::Minus
                 | TokenKind::Star
-                | TokenKind::Slash => Err(Error::at("expected an expression", token.position)),
+                | TokenKind::Slash
+                | TokenKind::Percent => Err(Error::at("expected an expression", token.position)),
                 TokenKind::Integer(_) | TokenKind::Identifier(_) | TokenKind::LeftParen => {
                     // Unreachable: these arms are handled above.
                     Err(Error::at("expected an expression", token.position))
