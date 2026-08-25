@@ -109,13 +109,11 @@ fn evaluate_source(source: String) -> Result<Output, String> {
 
 fn read_file(path: &OsString) -> Result<String, String> {
     let path_display = Path::new(path).display();
-    let bytes = fs::read(path).map_err(|error| {
-        format!("failed to read source file '{path_display}': {error}")
-    })?;
+    let bytes = fs::read(path)
+        .map_err(|error| format!("failed to read source file '{path_display}': {error}"))?;
 
-    String::from_utf8(bytes).map_err(|error| {
-        format!("source file '{path_display}' is not valid UTF-8: {error}")
-    })
+    String::from_utf8(bytes)
+        .map_err(|error| format!("source file '{path_display}' is not valid UTF-8: {error}"))
 }
 
 fn read_stdin<R>(reader: &mut R) -> Result<String, String>
@@ -127,13 +125,12 @@ where
         .read_to_end(&mut bytes)
         .map_err(|error| format!("failed to read standard input: {error}"))?;
 
-    String::from_utf8(bytes)
-        .map_err(|error| format!("standard input is not valid UTF-8: {error}"))
+    String::from_utf8(bytes).map_err(|error| format!("standard input is not valid UTF-8: {error}"))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{execute, Output};
+    use super::{execute, execute_with_reader, Output};
     use std::ffi::OsString;
 
     fn arguments(arguments: &[&str]) -> Vec<OsString> {
@@ -222,9 +219,8 @@ mod tests {
 
     #[test]
     fn stdin_mode_reads_the_complete_source() {
-        let mut input = std::io::Cursor::new(
-            b"let first = 2;\nlet second = first + 3;\nsecond * 4".to_vec(),
-        );
+        let mut input =
+            std::io::Cursor::new(b"let first = 2;\nlet second = first + 3;\nsecond * 4".to_vec());
 
         assert_eq!(
             execute_with_reader(arguments(&["--stdin"]), &mut input),
