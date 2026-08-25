@@ -63,6 +63,11 @@ impl<'a> Lexer<'a> {
                 continue;
             }
 
+            if character == '/' && self.comment_starts_here() {
+                self.skip_comment()?;
+                continue;
+            }
+
             let position = self.current_position();
             let kind = match character {
                 '=' => self.operator_with_optional_equals(TokenKind::Equals, TokenKind::EqualEqual),
@@ -186,6 +191,55 @@ impl<'a> Lexer<'a> {
         };
 
         Token { kind, position }
+    }
+
+    /// Whether the current '/' begins a `//` line comment or `/*` block
+    /// comment rather than the division operator.
+    fn comment_starts_here(&self) -> bool {
+        matches!(self.peek_character(), Some('/') | Some('*'))
+    }
+
+    /// The character immediately after the current one, if any.
+    fn peek_character(&self) -> Option<char> {
+        self.input[self.position..].chars().nth(1)
+    }
+
+    /// Skips a `//` line comment or `/* ... */` block comment that starts at
+    /// the current '/' character. Block comments do not nest; an unterminated
+    /// block comment is an error positioned at its opening `/*`.
+    fn skip_comment(&mut self) -> Result<(), Error> {
+        let position = self.current_position();
+        self.advance(); // consume the '/'
+
+        match self.current_character() {
+            Some('/') => {
+                self.advance(); // consume the second '/'
+                while let Some(character) = self.current_character() {
+                    if character == '\n' {
+                        break;
+                    }
+                    self.advance();
+                }
+            }
+            Some('*') => {
+                self.advance(); // consume the '*'
+                while let Some(character) = self.current_character() {
+                    if character == '*' {
+                        self.advance();
+                        if self.current_character() == Some('/') {
+                            self.advance();
+                            return Ok(());
+                        }
+                    } else {
+                        self.advance();
+                    }
+                }
+                return Err(Error::at("unterminated block comment", position));
+            }
+            _ => unreachable!("skip_comment requires '/' followed by '/' or '*'"),
+        }
+
+        Ok(())
     }
 
     fn current_character(&self) -> Option<char> {
@@ -312,6 +366,111 @@ mod tests {
                 .unwrap_err()
                 .to_string(),
             "integer literal out of range"
+        );
+    }
+
+    #[test]
+    fn skips_line_comments_without_emitting_tokens() {
+        let tokens = Lexer::new("1 + 2 // trailing comment").tokenize().unwrap();
+        let kinds: Vec<TokenKind> = tokens.iter().map(|token| token.kind.clone()).collect();
+
+        assert_eq!(
+            kinds,
+            vec![TokenKind::Integer(1), TokenKind::Plus, TokenKind::Integer(2)]
+        );
+    }
+
+    #[test]
+    fn line_comments_end_at_the_newline_and_positions_stay_correct() {
+        let tokens = Lexer::new("1 + // note\n  2").tokenize().unwrap();
+
+        // The '2' after the comment sits at line 2, column 3.
+        assert_eq!(tokens[2].position, SourcePosition { line: 2, column: 3 });
+    }
+
+    #[test]
+    fn line_comments_run_to_the_end_of_the_input() {
+        let tokens = Lexer::new("1 + 2 // no trailing newline").tokenize().unwrap();
+
+        assert_eq!(tokens.len(), 3);
+    }
+
+    #[test]
+    fn skips_block_comments_including_empty_and_multiline_ones() {
+        for input in ["1 /* comment */ + 2", "1/**/+2", "1 /*\nmulti\nline\n*/ + 2"] {
+            let tokens = Lexer::new(input).tokenize().unwrap();
+            let kinds: Vec<TokenKind> = tokens.iter().map(|token| token.kind.clone()).collect();
+
+            assert_eq!(
+                kinds,
+                vec![TokenKind::Integer(1), TokenKind::Plus, TokenKind::Integer(2)],
+                "input: {input}"
+            );
+        }
+    }
+
+    #[test]
+    fn block_comment_newlines_advance_line_and_column_tracking() {
+        let tokens = Lexer::new("1 /* first\nsecond */ + 2").tokenize().unwrap();
+
+        // The '+' after the block comment is at line 2, column 11.
+        assert_eq!(tokens[1].position, SourcePosition { line: 2, column: 11 });
+    }
+
+    #[test]
+    fn block_comments_do_not_nest() {
+        let tokens = Lexer::new("/* /* */ 1").tokenize().unwrap();
+
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].kind, TokenKind::Integer(1));
+    }
+
+    #[test]
+    fn rejects_unterminated_block_comments_with_the_opening_position() {
+        let error = Lexer::new("1 + /* oops").tokenize().unwrap_err();
+
+        assert_eq!(error.to_string(), "unterminated block comment");
+        assert_eq!(
+            error.position(),
+            Some(SourcePosition { line: 1, column: 5 })
+        );
+    }
+
+    #[test]
+    fn rejects_unterminated_block_comments_on_later_lines() {
+        let error = Lexer::new("1 + 2\n/* never closed").tokenize().unwrap_err();
+
+        assert_eq!(error.to_string(), "unterminated block comment");
+        assert_eq!(
+            error.position(),
+            Some(SourcePosition { line: 2, column: 1 })
+        );
+    }
+
+    #[test]
+    fn a_single_slash_remains_the_division_operator() {
+        let tokens = Lexer::new("8 / 2").tokenize().unwrap();
+        let kinds: Vec<TokenKind> = tokens.iter().map(|token| token.kind.clone()).collect();
+
+        assert_eq!(
+            kinds,
+            vec![TokenKind::Integer(8), TokenKind::Slash, TokenKind::Integer(2)]
+        );
+    }
+
+    #[test]
+    fn slash_followed_by_space_and_star_is_not_a_comment() {
+        let tokens = Lexer::new("1 / * 2").tokenize().unwrap();
+        let kinds: Vec<TokenKind> = tokens.iter().map(|token| token.kind.clone()).collect();
+
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Integer(1),
+                TokenKind::Slash,
+                TokenKind::Star,
+                TokenKind::Integer(2),
+            ]
         );
     }
 }

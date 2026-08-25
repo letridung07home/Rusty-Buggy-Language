@@ -119,6 +119,43 @@ fn evaluates_multiline_program_from_standard_input() {
 }
 
 #[test]
+fn evaluates_programs_with_comments() {
+    let output = run_cli(&["1 /* part */ + 2 // note"]);
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"3\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn evaluates_commented_program_from_a_file() {
+    let source = TemporarySource::new(b"let rate = 20; /* per hour */\nrate * 5 // total");
+    let output = run_cli(&["--file", source.as_str()]);
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"100\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn evaluates_commented_program_from_standard_input() {
+    let output = run_cli_with_stdin(&["--stdin"], b"1 /* a */ + 2 // b\n");
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"3\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn reports_unterminated_block_comments() {
+    let output = run_cli(&["1 + /* oops"]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(output.stderr, b"error: unterminated block comment\n");
+}
+
+#[test]
 fn evaluates_comparison_program_and_prints_integer_boolean_result() {
     let output = run_cli(&["let ready = 3 >= 2; ready * 10"]);
 
@@ -285,7 +322,7 @@ fn expected_help() -> String {
         "       rusty-buggy-language [--positions] [--input-limit <bytes>] -f <path> | --file <path>\n",
         "       rusty-buggy-language [--positions] [--input-limit <bytes>] --stdin\n",
         "\n",
-        "Evaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, parentheses, and prefix -.\n",
+        "Evaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, // and /* */ comments, parentheses, and prefix -.\n",
         "\n",
         "The program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input. Source modes are mutually exclusive.\n",
         "\n",
