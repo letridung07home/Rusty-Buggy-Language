@@ -276,9 +276,7 @@ impl<'a> Parser<'a> {
             | Some(Token::Plus)
             | Some(Token::Minus)
             | Some(Token::Star)
-            | Some(Token::Slash) => {
-                Err("expected an expression".to_owned())
-            }
+            | Some(Token::Slash) => Err("expected an expression".to_owned()),
             None => Err("expected an expression".to_owned()),
         }
     }
