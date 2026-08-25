@@ -33,12 +33,27 @@ jobs:
 
       # libFuzzer's sanitizer coverage is only available on the nightly
       # toolchain; the fuzz crate is excluded from the stable and MSRV CI jobs.
-      - name: Install nightly Rust
+      # The date is pinned so the rust-cache key stays stable across days; a
+      # floating nightly would throw the cache away every night. Bump the
+      # date periodically to pick up newer nightly fixes.
+      - name: Install pinned nightly Rust
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
-          toolchain: nightly
+          toolchain: nightly-2026-08-25
 
+      # Caches the fuzz workspace's dependency build (libfuzzer-sys and its
+      # C++ runtime) plus the installed cargo-fuzz binary. The version is
+      # part of the key so bumping it starts a fresh cache.
+      - name: Cache Cargo artifacts
+        id: rust-cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: cargo-fuzz-0.13.2
+          workspaces: "fuzz -> target"
+
+      # Skip the ~3 minute compile when the binary was restored from cache.
       - name: Install cargo-fuzz 0.13.2
+        if: steps.rust-cache.outputs.cache-hit != 'true'
         run: cargo install cargo-fuzz --version 0.13.2 --locked
 
       # cargo-fuzz builds the target in release mode by default.

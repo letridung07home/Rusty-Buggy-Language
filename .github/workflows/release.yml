@@ -36,6 +36,13 @@ jobs:
           toolchain: stable
           target: ${{ matrix.target }}
 
+      # Each matrix entry (OS + target triple) gets its own cache via the
+      # toolchain- and job-based cache key.
+      - name: Cache Cargo build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-workspace-crates: "true"
+
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
 

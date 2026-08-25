@@ -87,7 +87,9 @@ source selection and complete UTF-8 input read
   check.
   `.github/workflows/release.yml` creates releases from validated version tags,
   extracts their descriptions from `CHANGELOG.md`, and attaches prebuilt
-  Linux, macOS, and Windows `x86_64` binaries built from the tag.
+  Linux, macOS, and Windows `x86_64` binaries built from the tag. All three
+  workflows cache Cargo build artifacts with `Swatinem/rust-cache`; the fuzz
+  job pins a specific nightly date so its cache key stays stable across days.
 
 ## Evolving the language
 
