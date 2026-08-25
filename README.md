@@ -13,7 +13,8 @@ integer `1` for true and `0` for false, so their results can be stored in
 variables or used in later arithmetic.
 
 For the complete grammar, evaluation rules, operator precedence, CLI behavior,
-and error conditions, see the [language reference](docs/language.md). Historical
+and error conditions, see the [language reference](docs/language.md). The
+[roadmap](docs/roadmap.md) defines upcoming release goals, while historical
 changes are recorded in the [changelog](CHANGELOG.md).
 
 ## Getting started

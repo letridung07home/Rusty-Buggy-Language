@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-25
+
+### Added
+
+- Added a v1.0 roadmap defining the stable core-language scope, release
+  requirements, and explicitly deferred features.
+
 ## [0.8.0] - 2026-08-25
 
 ### Added

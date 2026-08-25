@@ -13,6 +13,7 @@ Keep each document focused on its audience:
 - `README.md` introduces the project and shows how to run it.
 - `docs/language.md` is the authoritative description of currently supported
   syntax and behavior.
+- `docs/roadmap.md` records intended release goals and their scope.
 - `docs/development.md` (this guide) records implementation and maintenance
   decisions.
 - `CONTRIBUTING.md` covers contribution workflow and releases.
