@@ -1,6 +1,6 @@
 #[derive(Debug, PartialEq)]
 enum Token {
-    Integer(i64),
+    Integer(u64),
     Plus,
     Minus,
     Star,
@@ -50,14 +50,14 @@ impl<'a> Lexer<'a> {
     }
 
     fn integer_literal(&mut self) -> Result<Token, String> {
-        let mut value = 0_i64;
+        let mut value = 0_u64;
 
         while let Some(character) = self.current_character() {
             if !character.is_ascii_digit() {
                 break;
             }
 
-            let digit = i64::from(character as u8 - b'0');
+            let digit = u64::from(character as u8 - b'0');
             value = value
                 .checked_mul(10)
                 .and_then(|value| value.checked_add(digit))
@@ -89,7 +89,8 @@ enum BinaryOperator {
 
 #[derive(Debug, PartialEq)]
 enum Expression {
-    Literal(i64),
+    Literal(u64),
+    UnaryNegation(Box<Expression>),
     Binary {
         operator: BinaryOperator,
         left: Box<Expression>,
@@ -149,7 +150,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_multiplicative(&mut self) -> Result<Expression, String> {
-        let mut expression = self.parse_primary()?;
+        let mut expression = self.parse_unary()?;
 
         loop {
             let operator = match self.peek() {
@@ -158,7 +159,7 @@ impl<'a> Parser<'a> {
                 _ => break,
             };
             self.advance();
-            let right = self.parse_primary()?;
+            let right = self.parse_unary()?;
             expression = Expression::Binary {
                 operator,
                 left: Box::new(expression),
@@ -167,6 +168,16 @@ impl<'a> Parser<'a> {
         }
 
         Ok(expression)
+    }
+
+    fn parse_unary(&mut self) -> Result<Expression, String> {
+        if matches!(self.peek(), Some(Token::Minus)) {
+            self.advance();
+            let expression = self.parse_unary()?;
+            return Ok(Expression::UnaryNegation(Box::new(expression)));
+        }
+
+        self.parse_primary()
     }
 
     fn parse_primary(&mut self) -> Result<Expression, String> {
@@ -216,7 +227,19 @@ impl Token {
 
 fn evaluate_expression(expression: &Expression) -> Result<i64, String> {
     match expression {
-        Expression::Literal(value) => Ok(*value),
+        Expression::Literal(value) => i64::try_from(*value)
+            .map_err(|_| "integer literal out of range".to_owned()),
+        Expression::UnaryNegation(operand) => {
+            if let Expression::Literal(value) = operand.as_ref() {
+                if *value == (i64::MAX as u64) + 1 {
+                    return Ok(i64::MIN);
+                }
+            }
+
+            evaluate_expression(operand)?
+                .checked_neg()
+                .ok_or_else(|| "integer negation overflow".to_owned())
+        }
         Expression::Binary {
             operator,
             left,
@@ -362,7 +385,72 @@ mod tests {
     }
 
     #[test]
-    fn unary_negation_is_not_supported() {
-        assert_eq!(evaluate("-1"), Err("expected an expression".to_owned()));
+    fn accepts_negative_literals() {
+        assert_eq!(evaluate("-1"), Ok(-1));
+    }
+
+    #[test]
+    fn negates_parenthesized_expressions() {
+        assert_eq!(evaluate("-(1 + 2)"), Ok(-3));
+    }
+
+    #[test]
+    fn multiplies_negative_operands() {
+        assert_eq!(evaluate("3 * -2"), Ok(-6));
+        assert_eq!(evaluate("-2 * -3"), Ok(6));
+    }
+
+    #[test]
+    fn unary_negation_is_right_associative() {
+        assert_eq!(evaluate("--1"), Ok(1));
+        assert_eq!(evaluate("---1"), Ok(-1));
+    }
+
+    #[test]
+    fn unary_negation_binds_tighter_than_multiplication() {
+        assert_eq!(evaluate("-2 * 3 + 4"), Ok(-2));
+    }
+
+    #[test]
+    fn accepts_i64_minimum_as_a_negated_literal() {
+        assert_eq!(evaluate("-9223372036854775808"), Ok(i64::MIN));
+        assert_eq!(evaluate("-(9223372036854775808)"), Ok(i64::MIN));
+    }
+
+    #[test]
+    fn rejects_out_of_range_literal_magnitudes() {
+        assert_eq!(
+            evaluate("9223372036854775808"),
+            Err("integer literal out of range".to_owned())
+        );
+        assert_eq!(
+            evaluate("-9223372036854775809"),
+            Err("integer literal out of range".to_owned())
+        );
+    }
+
+    #[test]
+    fn rejects_unary_plus() {
+        assert_eq!(evaluate("+1"), Err("expected an expression".to_owned()));
+        assert_eq!(
+            evaluate("1 * +2"),
+            Err("expected an expression".to_owned())
+        );
+    }
+
+    #[test]
+    fn rejects_negation_overflow() {
+        assert_eq!(
+            evaluate("--9223372036854775808"),
+            Err("integer negation overflow".to_owned())
+        );
+    }
+
+    #[test]
+    fn rejects_negated_minimum_divided_by_negative_one() {
+        assert_eq!(
+            evaluate("-9223372036854775808 / -1"),
+            Err("integer division overflow".to_owned())
+        );
     }
 }

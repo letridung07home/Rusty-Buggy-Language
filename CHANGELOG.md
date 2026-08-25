@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-25
+
+### Added
+
+- Added prefix unary negation with right-to-left associativity and precedence
+  tighter than multiplication and division.
+- Added support for the negated `i64::MIN` literal and coverage for negation,
+  range errors, unary-plus rejection, and negation/division overflow.
+
 ## [0.2.0] - 2026-08-25
 
 ### Added
