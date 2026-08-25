@@ -31,12 +31,12 @@ updates the language reference and changelog on completion.
 
 **Hardening the evaluator (essential)**
 
-- [ ] Add a parser nesting-depth limit that reports a clear
+- [x] Add a parser nesting-depth limit that reports a clear
   "program too deeply nested" error instead of overflowing the stack on
   adversarial input.
-- [ ] Add a configurable input-size limit so a single program cannot exhaust
+- [x] Add a configurable input-size limit so a single program cannot exhaust
   memory or evaluation time.
-- [ ] Add source positions (line and column) to error output so failures can
+- [x] Add source positions (line and column) to error output so failures can
   be located in the input.
 - [ ] Add property-based tests (`proptest`) that check evaluation against a
   reference model, and a fuzzing harness run in CI for bounded time.
@@ -76,6 +76,23 @@ updates the language reference and changelog on completion.
   Rust 1.70.
 - [x] Produce a reproducible `v1.0.0` GitHub release from an annotated tag,
   with release notes imported from `CHANGELOG.md`.
+
+### v1.1.0 milestone — delivered
+
+- [x] Add source positions (line and column) to evaluation and syntax errors,
+  exposed through `Error::position()` and reported by the CLI with the
+  opt-in `--positions` flag, without changing existing error messages.
+- [x] Add a parser nesting-depth limit that rejects programs nested deeper
+  than 256 levels with a clear "program too deeply nested" error instead of
+  overflowing the stack on adversarial input.
+- [x] Add a configurable input-size limit via `evaluate_with_limits` and the
+  CLI `--input-limit <bytes>` flag so a single program cannot exhaust memory
+  or evaluation time.
+- [x] Keep the evaluator-hardening features backward compatible with the
+  v1.0.0 contract and pass the full GitHub Actions validation suite on
+  stable Rust and Rust 1.70.
+- [x] Produce a `v1.1.0` GitHub release from an annotated tag, with release
+  notes imported from `CHANGELOG.md`.
 
 ### Non-goals for the 1.x series
 
