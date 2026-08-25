@@ -21,6 +21,11 @@ cargo run -- "1 + 2 * (3 + 4)"
 
 cargo run -- "-(1 + 2) * -3"
 # 9
+
+cargo run -- --help
+# Usage: rusty-buggy-language "<expression>"
+#
+# Evaluates an i64 integer expression with +, -, *, /, parentheses, and prefix -.
 ```
 
 The expression may contain ASCII decimal integer literals, whitespace, binary
