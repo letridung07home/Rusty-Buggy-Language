@@ -20,23 +20,34 @@ Keep each document focused on its audience:
 
 ## Implementation overview
 
-The executable follows a small, direct pipeline:
+The library and executable share a small, direct pipeline:
 
 ```text
-command-line argument
+library evaluate(program)
         |
         v
 lexer -> tokens -> parser -> program AST -> evaluator -> integer result
+        ^
+        |
+private CLI adapter <- process startup
 ```
 
-- `src/main.rs` owns the command-line interface: argument-count validation,
-  help and version flags, standard-output/error behavior, and exit status.
-- `src/expression.rs` contains the language implementation. Its lexer turns
-  text into tokens; its recursive-descent parser builds declarations and
-  expressions according to precedence; its evaluator resolves immutable
+- `src/lib.rs` owns the public library boundary and orchestration. Its sole
+  public function is `evaluate(program: &str) -> Result<i64, Error>`, and its
+  sole public type is the opaque `Error`, which preserves the existing
+  user-facing message through `Display` and `std::error::Error`.
+- `src/ast.rs`, `src/lexer.rs`, `src/parser.rs`, `src/evaluator.rs`, and
+  `src/error.rs` are flat, private implementation modules. The lexer turns
+  text into tokens; the recursive-descent parser builds declarations and
+  expressions according to precedence; and the evaluator resolves immutable
   variables and performs checked `i64` arithmetic.
-- Unit tests next to the implementation cover syntax and evaluation behavior.
-  `tests/cli.rs` covers the compiled executable's output and exit status.
+- `src/cli.rs` is a private executable adapter for argument-count validation,
+  help and version flags, standard-output/error behavior, and exit status.
+  `src/main.rs` only supplies process arguments and delegates the exit code.
+- Unit tests next to each pipeline stage cover lexical, syntax, and evaluation
+  behavior. Library-facade tests cover the public API and error display.
+  `tests/cli.rs` remains the executable-contract suite for output and exit
+  status.
 - `.github/workflows/ci.yml` checks formatting, compilation, tests, Clippy,
   and Rust documentation on stable Rust, then checks compilation and tests on
   the minimum supported Rust version. `.github/workflows/release.yml` creates

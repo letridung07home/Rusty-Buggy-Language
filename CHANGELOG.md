@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-25
+
+### Changed
+
+- Converted the CLI-only crate into a reusable library with a public
+  `evaluate` API and a thin CLI adapter while preserving language behavior,
+  error messages, and command-line behavior.
+
 ## [0.6.0] - 2026-08-25
 
 ### Added
