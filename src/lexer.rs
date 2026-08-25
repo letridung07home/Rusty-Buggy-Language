@@ -23,6 +23,7 @@ pub(crate) enum TokenKind {
     Minus,
     Star,
     Slash,
+    Percent,
     LeftParen,
     RightParen,
 }
@@ -105,6 +106,10 @@ impl<'a> Lexer<'a> {
                 '/' => {
                     self.advance();
                     TokenKind::Slash
+                }
+                '%' => {
+                    self.advance();
+                    TokenKind::Percent
                 }
                 '(' => {
                     self.advance();
@@ -277,6 +282,7 @@ impl Token {
             TokenKind::Minus => "'-'",
             TokenKind::Star => "'*'",
             TokenKind::Slash => "'/'",
+            TokenKind::Percent => "'%'",
             TokenKind::LeftParen => "'('",
             TokenKind::RightParen => "')'",
         }
@@ -464,6 +470,21 @@ mod tests {
         assert_eq!(
             error.position(),
             Some(SourcePosition { line: 2, column: 1 })
+        );
+    }
+
+    #[test]
+    fn tokenizes_the_percent_operator() {
+        let tokens = Lexer::new("1 % 2").tokenize().unwrap();
+        let kinds: Vec<TokenKind> = tokens.iter().map(|token| token.kind.clone()).collect();
+
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Integer(1),
+                TokenKind::Percent,
+                TokenKind::Integer(2)
+            ]
         );
     }
 

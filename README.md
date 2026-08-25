@@ -8,10 +8,10 @@ UTF-8 standard input. Each program contains zero or more sequential, immutable
 `let` declarations followed by one final integer expression. It supports ASCII
 decimal integer literals, identifiers, parentheses, prefix `-`, the comparison
 operators `<`, `<=`, `>`, `>=`, `==`, and `!=`, the arithmetic operators `+`,
-`-`, `*`, and `/` with checked signed 64-bit arithmetic, and `//` line comments
-and `/* */` block comments. Comparisons produce integer `1` for true and `0`
-for false, so their results can be stored in variables or used in later
-arithmetic.
+`-`, `*`, `/`, and `%` with checked signed 64-bit arithmetic, and `//` line
+comments and `/* */` block comments. Comparisons produce integer `1` for true
+and `0` for false, so their results can be stored in variables or used in
+later arithmetic.
 
 For the complete grammar, evaluation rules, operator precedence, CLI behavior,
 and error conditions, see the [language reference](docs/language.md). The

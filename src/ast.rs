@@ -6,6 +6,7 @@ pub(crate) enum BinaryOperator {
     Subtract,
     Multiply,
     Divide,
+    Remainder,
     LessThan,
     LessThanOrEqual,
     GreaterThan,

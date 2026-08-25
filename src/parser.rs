@@ -178,6 +178,7 @@ impl<'a> Parser<'a> {
             let operator = match self.peek_kind() {
                 Some(TokenKind::Star) => BinaryOperator::Multiply,
                 Some(TokenKind::Slash) => BinaryOperator::Divide,
+                Some(TokenKind::Percent) => BinaryOperator::Remainder,
                 _ => break,
             };
             let position = self.peek().map(|token| token.position);
@@ -352,6 +353,12 @@ mod tests {
     #[test]
     fn rejects_empty_input() {
         assert_eq!(parse_error("   "), "expression is empty");
+    }
+
+    #[test]
+    fn rejects_modulo_with_a_missing_operand() {
+        assert_eq!(parse_error("1 %"), "expected an expression");
+        assert_eq!(parse_error("1 % * 2"), "expected an expression");
     }
 
     #[test]

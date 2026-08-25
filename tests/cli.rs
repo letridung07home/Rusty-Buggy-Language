@@ -177,6 +177,55 @@ fn rejects_chained_comparisons() {
 }
 
 #[test]
+fn evaluates_programs_with_modulo() {
+    let output = run_cli(&["10 % 3"]);
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"1\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn evaluates_modulo_program_from_a_file() {
+    let source = TemporarySource::new(b"let a = 10; a % 3");
+    let output = run_cli(&["--file", source.as_str()]);
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"1\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn reports_modulo_by_zero_on_stderr() {
+    let output = run_cli(&["8 % (3 - 3)"]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(output.stderr, b"error: division by zero\n");
+}
+
+#[test]
+fn reports_remainder_overflow_on_stderr() {
+    let output = run_cli(&["-9223372036854775808 % -1"]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(output.stderr, b"error: integer remainder overflow\n");
+}
+
+#[test]
+fn positions_flag_reports_modulo_error_position() {
+    let output = run_cli(&["--positions", "8 % (3 - 3)"]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        output.stderr,
+        b"error: division by zero\n at line 1, column 3\n"
+    );
+}
+
+#[test]
 fn reports_invalid_expression_on_stderr_without_stdout() {
     let output = run_cli(&["8 / (3 - 3)"]);
 
@@ -322,7 +371,7 @@ fn expected_help() -> String {
         "       rusty-buggy-language [--positions] [--input-limit <bytes>] -f <path> | --file <path>\n",
         "       rusty-buggy-language [--positions] [--input-limit <bytes>] --stdin\n",
         "\n",
-        "Evaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, // and /* */ comments, parentheses, and prefix -.\n",
+        "Evaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, %, // and /* */ comments, parentheses, and prefix -.\n",
         "\n",
         "The program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input. Source modes are mutually exclusive.\n",
         "\n",

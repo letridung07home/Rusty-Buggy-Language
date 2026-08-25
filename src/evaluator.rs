@@ -63,6 +63,15 @@ fn evaluate_expression(
                             .ok_or_else(|| positioned_error("integer division overflow", *position))
                     }
                 }
+                BinaryOperator::Remainder => {
+                    if right == 0 {
+                        Err(positioned_error("division by zero", *position))
+                    } else {
+                        left.checked_rem(right).ok_or_else(|| {
+                            positioned_error("integer remainder overflow", *position)
+                        })
+                    }
+                }
                 BinaryOperator::LessThan => Ok(if left < right { 1 } else { 0 }),
                 BinaryOperator::LessThanOrEqual => Ok(if left <= right { 1 } else { 0 }),
                 BinaryOperator::GreaterThan => Ok(if left > right { 1 } else { 0 }),
@@ -195,6 +204,52 @@ mod tests {
                 .unwrap_err()
                 .to_string(),
             "undefined variable: 'second'"
+        );
+    }
+
+    #[test]
+    fn evaluates_modulo_with_truncating_division_semantics() {
+        assert_eq!(evaluate_source("10 % 3"), Ok(1));
+        assert_eq!(evaluate_source("20 % 5"), Ok(0));
+        assert_eq!(evaluate_source("-7 % 3"), Ok(-1));
+        assert_eq!(evaluate_source("7 % -3"), Ok(1));
+        assert_eq!(evaluate_source("-7 % -3"), Ok(-1));
+    }
+
+    #[test]
+    fn evaluates_modulo_at_multiplicative_precedence() {
+        assert_eq!(evaluate_source("2 + 3 * 4 % 5"), Ok(4));
+        assert_eq!(evaluate_source("(2 + 3) % 4"), Ok(1));
+        assert_eq!(evaluate_source("17 % 5 * 2"), Ok(4));
+        assert_eq!(evaluate_source("20 % 6 % 5"), Ok(2));
+    }
+
+    #[test]
+    fn evaluates_modulo_in_variable_declarations() {
+        assert_eq!(evaluate_source("let a = 10; let b = a % 3; b + 1"), Ok(2));
+    }
+
+    #[test]
+    fn reports_modulo_errors_with_positions() {
+        assert_eq!(
+            evaluate_source("8 % (3 - 3)").unwrap_err().to_string(),
+            "division by zero"
+        );
+        assert_eq!(
+            evaluate_source("-9223372036854775808 % -1")
+                .unwrap_err()
+                .to_string(),
+            "integer remainder overflow"
+        );
+
+        // The '%' operator sits at line 1, column 3 of "8 % (3 - 3)".
+        let error = evaluate_source("8 % (3 - 3)").unwrap_err();
+        assert_eq!(
+            error.position(),
+            Some(crate::error::SourcePosition {
+                line: 1,
+                column: 3
+            })
         );
     }
 

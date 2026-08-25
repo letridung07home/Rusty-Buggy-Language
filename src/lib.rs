@@ -122,6 +122,12 @@ mod tests {
     }
 
     #[test]
+    fn evaluates_modulo_through_the_library_facade() {
+        assert_eq!(evaluate("10 % 3"), Ok(1));
+        assert_eq!(evaluate("let a = 10; let b = a % 3; b + 1"), Ok(2));
+    }
+
+    #[test]
     fn comments_do_not_shift_error_positions() {
         // The '/' operator sits at line 2, column 3 of the commented program.
         let error = evaluate("// note\n8 / (3 - 3)").unwrap_err();

@@ -74,7 +74,7 @@ expression     ::= comparison
 comparison     ::= additive (comparison_operator additive)?
 comparison_operator ::= "<" | "<=" | ">" | ">=" | "==" | "!="
 additive       ::= multiplicative (("+" | "-") multiplicative)*
-multiplicative ::= unary (("*" | "/") unary)*
+multiplicative ::= unary (("*" | "/" | "%") unary)*
 unary          ::= "-" unary | primary
 primary        ::= integer | identifier | "(" expression ")"
 
@@ -107,7 +107,10 @@ All values are signed 64-bit integers in the range `-9223372036854775808` to
 `9223372036854775807`. Arithmetic is checked. Addition, subtraction,
 multiplication, and unary negation report an error when their result is outside
 that range. Division truncates toward zero; division by zero and dividing
-`-9223372036854775808` by `-1` are errors.
+`-9223372036854775808` by `-1` are errors. The `%` operator returns the
+remainder of truncated division, so its sign follows the dividend; it has the
+same checked semantics as `/`, and modulo by zero or
+`-9223372036854775808 % -1` are errors.
 
 The `-` in a negative literal is parsed as prefix unary negation. The special
 literal `-9223372036854775808` is accepted, while its unnegated magnitude is
@@ -136,7 +139,7 @@ default order:
 | Precedence | Operators | Associativity |
 | ---: | --- | --- |
 | Highest | prefix `-` | right-to-left |
-| 3 | `*`, `/` | left-to-right |
+| 3 | `*`, `/`, `%` | left-to-right |
 | 2 | `+`, `-` | left-to-right |
 | Lowest | `<`, `<=`, `>`, `>=`, `==`, `!=` | at most one per expression level |
 
@@ -163,9 +166,9 @@ standard error, prints no result, and exits unsuccessfully. Errors include:
 - an unterminated block comment;
 - integer literals outside the supported range;
 - undefined or forward-referenced variables and duplicate declarations;
-- arithmetic overflow, including negating the minimum integer or dividing it
-  by `-1`;
-- division by zero;
+- arithmetic overflow, including negating the minimum integer, dividing it
+  by `-1`, or computing `-9223372036854775808 % -1`;
+- division by zero and modulo by zero;
 - a source program longer than the configured input limit; and
 - expressions or prefix `-` chains nested more deeply than the nesting limit.
 
