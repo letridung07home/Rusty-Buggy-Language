@@ -74,11 +74,15 @@ jobs:
         if: steps.rust-cache.outputs.cache-hit != 'true'
         run: cargo install cargo-llvm-cov --locked
 
-      # Prints the summary and fails the job when total line coverage drops
-      # below 80%, so blind spots are visible in CI. Tune the threshold to
-      # the measured baseline after the first run.
-      - name: Generate coverage report
-        run: cargo llvm-cov --all-features --lcov --output-path lcov.info --fail-under-lines 80
+      # Prints the per-file summary and fails the job when total line
+      # coverage drops below 80%, so blind spots are visible in CI. Tune the
+      # threshold to the measured baseline. The crate is small, so the test
+      # suite runs a second time for the lcov export at negligible cost.
+      - name: Generate coverage summary
+        run: cargo llvm-cov --all-features --fail-under-lines 80
+
+      - name: Export lcov report
+        run: cargo llvm-cov --all-features --lcov --output-path lcov.info
 
       # Secrets cannot be referenced in `if:` conditionals, so probe the
       # step-level env and gate the upload on its output. v5 also supports
