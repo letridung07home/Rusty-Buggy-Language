@@ -25,12 +25,16 @@ cargo fmt --all -- --check
 cargo check --all-targets --all-features
 cargo test --all-targets --all-features
 cargo clippy --all-targets --all-features -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
 ```
 
-The GitHub Actions workflow runs these checks on pushes to `main` and on pull
-requests. In the maintainer environment, Rust checks, builds, and tests must
-run through GitHub Actions rather than locally. Use `gh run` to monitor the
-workflow and inspect its logs.
+The GitHub Actions workflow runs these stable-toolchain quality checks on
+pushes to `main` and on pull requests. It also compiles and tests the package
+with Rust 1.70, the project's minimum supported Rust version (MSRV), so new
+changes must remain compatible with both stable Rust and the MSRV. In the
+maintainer environment, Rust checks, builds, and tests must run through GitHub
+Actions rather than locally. Use `gh run` to monitor the workflow and inspect
+its logs.
 
 ## Release process
 

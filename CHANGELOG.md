@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-08-25
+
+### Added
+
+- Added standard-library integration tests that exercise the compiled CLI's
+  success, error-output, and failure-status behavior.
+- Added weekly grouped Dependabot updates for GitHub Actions and Cargo
+  dependencies.
+
+### Changed
+
+- Declared Rust 1.70 as the minimum supported Rust version and split CI into
+  stable quality checks and Rust 1.70 compatibility checks.
+- Hardened release validation to require matching numeric SemVer tags and
+  nonempty changelog entries, with deterministic links to the prior release.
+- Updated contributor guidance to document stable-toolchain and MSRV coverage.
+
 ## [0.3.0] - 2026-08-25
 
 ### Added

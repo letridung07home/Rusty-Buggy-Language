@@ -1,7 +1,8 @@
 [package]
 name = "rusty-buggy-language"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
+rust-version = "1.70"
 description = "A programming language written in Rust for AI coding agents"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
