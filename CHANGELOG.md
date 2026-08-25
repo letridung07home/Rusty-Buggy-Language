@@ -9,8 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Restructured the roadmap to state the v1.0 goals explicitly and mark the
-  v1.0.0 milestone complete.
+- Restructured the roadmap into the v1.x series with concrete development
+  goals (evaluator hardening, agent-friendly additions, and distribution)
+  and the completed v1.0.0 milestone recorded separately.
 
 ## [1.0.0] - 2026-08-25
 

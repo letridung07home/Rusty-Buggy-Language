@@ -5,13 +5,60 @@ language specification: supported behavior is defined by the
 [language reference](language.md), and completed changes are recorded in the
 [changelog](../CHANGELOG.md).
 
-## v1.0 — Stable core language
+## v1.x — Stable core language series
 
-**Goal:** Deliver Rusty Buggy Language as a stable, predictable,
-agent-friendly integer expression language with a supported Rust library API
-and command-line interface.
+**Goal:** Keep Rusty Buggy Language a stable, predictable, agent-friendly
+integer expression language with a supported Rust library API and CLI for the
+lifetime of the 1.x series. Every 1.x change must remain backward compatible
+with the v1.0.0 contract; anything that would break it is deferred to v2.
 
-### Goals
+### Series commitments
+
+- No breaking changes to language semantics, the public
+  `evaluate(&str) -> Result<i64, Error>` API, CLI behavior, or documented
+  error messages within the 1.x series.
+- Every new feature or fix is specified in the language reference, covered by
+  tests, and recorded in the changelog, with the README and CLI help kept in
+  sync.
+- Every 1.x release passes the GitHub Actions validation suite on stable Rust
+  and Rust 1.70 and ships from an annotated tag with changelog-imported
+  release notes.
+
+### Development goals
+
+Concrete deliverables for the 1.x series, ordered by priority. Each one
+updates the language reference and changelog on completion.
+
+**Hardening the evaluator (essential)**
+
+- [ ] Add a parser nesting-depth limit that reports a clear
+  "program too deeply nested" error instead of overflowing the stack on
+  adversarial input.
+- [ ] Add a configurable input-size limit so a single program cannot exhaust
+  memory or evaluation time.
+- [ ] Add source positions (line and column) to error output so failures can
+  be located in the input.
+- [ ] Add property-based tests (`proptest`) that check evaluation against a
+  reference model, and a fuzzing harness run in CI for bounded time.
+
+**Agent-friendly language additions (backward compatible)**
+
+- [ ] Add `//` line comments and `/* */` block comments, stripped by the
+  lexer so they never affect evaluation.
+- [ ] Add the modulo operator `%` with the same checked semantics as `/`
+  (truncating toward zero, with division-by-zero and overflow errors).
+
+**Developer experience and distribution**
+
+- [ ] Add an interactive REPL mode that reads programs line by line and prints
+  each result, reusing the exact CLI evaluator.
+- [ ] Publish the crate to crates.io and keep package versions in sync with
+  every 1.x release.
+- [ ] Attach prebuilt Linux, macOS, and Windows binaries to each GitHub
+  release so agents can install without a Rust toolchain.
+- [ ] Add a tutorial and an `examples/` directory of runnable programs.
+
+### v1.0.0 milestone — delivered
 
 - [x] Freeze and document the core language contract: immutable `let`
   declarations; signed, checked `i64` arithmetic; comparison expressions
@@ -30,13 +77,14 @@ and command-line interface.
 - [x] Produce a reproducible `v1.0.0` GitHub release from an annotated tag,
   with release notes imported from `CHANGELOG.md`.
 
-### Non-goals
+### Non-goals for the 1.x series
 
-Control flow, functions, mutation, comments, floating-point values, additional
-numeric types, and a standard library are not v1 goals unless a concrete agent
-workflow proves they are essential to the stable core.
+Mutation, control flow, functions, floating-point values, additional numeric
+types, strings, bitwise operators, and a standard library are not 1.x goals;
+they are candidates for v2. Any feature that would require breaking the v1
+contract is deferred to v2.
 
 ## v2.0 — Next milestone
 
-Goals for v2.0 are not yet defined. Planning begins once the v1 goals above
+Goals for v2.0 are not yet defined. Planning begins once the v1.x goals above
 are settled.
