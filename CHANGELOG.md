@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Added an interactive REPL mode via `rusty-buggy-language --repl` that reads
+  one program per line from standard input and prints each result, reusing
+  the exact CLI evaluator. A REPL that sees no programs exits unsuccessfully;
+  otherwise errors are printed and the loop continues.
+- Added a dependency-free property-based test that evaluates generated
+  programs against an independent reference model covering arithmetic
+  operators, nesting, and sequential immutable `let` bindings.
+- Added a dependency-free fuzzing smoke harness over the public `evaluate`
+  entry point with random and edge-case inputs, plus a bounded-time CI job
+  that runs it with a hard timeout.
+- Added a short introduction and reference in `docs/tutorial.md`, and an
+  `examples/` directory of runnable programs.
+
+### Changed
+
+- The GitHub Actions release workflow now builds and attaches prebuilt
+  `x86_64` binaries for Linux, macOS, and Windows to each GitHub release.
+
 ## [1.3.0] - 2026-08-25
 
 ### Added

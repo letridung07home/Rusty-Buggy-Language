@@ -1,0 +1,12 @@
+// Sequential immutable bindings computing a simple budget.
+let monthly_income = 3500;
+let rent = 1200;
+let food = 500;
+let transport = 300;
+let savings_rate = 10; // percent
+
+let expenses = rent + food + transport;
+let savings = monthly_income * savings_rate / 100;
+let leftover = monthly_income - expenses - savings;
+
+leftover

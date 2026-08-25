@@ -38,8 +38,8 @@ updates the language reference and changelog on completion.
   memory or evaluation time.
 - [x] Add source positions (line and column) to error output so failures can
   be located in the input.
-- [ ] Add property-based tests (`proptest`) that check evaluation against a
-  reference model, and a fuzzing harness run in CI for bounded time.
+- [x] Add property-based tests that check evaluation against a reference
+  model, and a fuzzing harness run in CI for bounded time.
 
 **Agent-friendly language additions (backward compatible)**
 
@@ -50,13 +50,16 @@ updates the language reference and changelog on completion.
 
 **Developer experience and distribution**
 
-- [ ] Add an interactive REPL mode that reads programs line by line and prints
-  each result, reusing the exact CLI evaluator.
+- [x] Add an interactive REPL mode (`rusty-buggy-language --repl`) that reads
+  programs line by line and prints each result, reusing the exact CLI
+  evaluator.
 - [ ] Publish the crate to crates.io and keep package versions in sync with
-  every 1.x release.
-- [ ] Attach prebuilt Linux, macOS, and Windows binaries to each GitHub
+  every 1.x release. Requires an automated publish step executed in GitHub
+  Actions.
+- [x] Attach prebuilt Linux, macOS, and Windows binaries to each GitHub
   release so agents can install without a Rust toolchain.
-- [ ] Add a tutorial and an `examples/` directory of runnable programs.
+- [x] Add a tutorial (`docs/tutorial.md`) and an `examples/` directory of
+  runnable programs.
 
 ### v1.0.0 milestone — delivered
 

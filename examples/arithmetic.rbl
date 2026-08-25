@@ -1,0 +1,9 @@
+// All arithmetic operators with explicit parentheses and comments.
+// Run with: cargo run -- examples/arithmetic.rbl
+let sum = 7 + 3;        // 10
+let difference = 7 - 3; // 4
+let product = 7 * 3;    // 21
+let quotient = 7 / 3;   // 2 (truncating)
+let remainder = 7 % 3;  // 1
+
+sum + difference + product + quotient + remainder

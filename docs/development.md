@@ -18,6 +18,8 @@ Keep each document focused on its audience:
   decisions.
 - `CONTRIBUTING.md` covers contribution workflow and releases.
 - `CHANGELOG.md` records versioned history, not the current specification.
+- `docs/tutorial.md` introduces the language with runnable commands, and the
+  `examples/` directory holds runnable programs; both complement the README.
 
 ## Implementation overview
 
@@ -55,21 +57,27 @@ source selection and complete UTF-8 input read
   enforce the byte-length input limit from `Limits` before lexing. Positions
   are always tracked internally, but CLI output only shows them when the
   `--positions` flag is passed, keeping the default error text stable.
-- `src/cli.rs` is a private executable adapter for source-mode selection,
-  complete UTF-8 reads from files or standard input, argument validation, help
-  and version flags, standard-output/error behavior, and exit status. It passes
-  the selected source unchanged to the public `evaluate` function.
-  `src/main.rs` only supplies process arguments and delegates the exit code.
+- `src/main.rs` only supplies process arguments and delegates the exit code.
 - Unit tests next to each pipeline stage cover lexical, syntax, and evaluation
   behavior. Library-facade tests cover the public API and error display.
-  `src/cli.rs` tests cover source selection and injected input reads, while
-  `tests/cli.rs` remains the executable-contract suite for inline, file, and
-  standard-input behavior, output, and exit status.
+  `src/cli.rs` tests cover source selection, the REPL, and injected input
+  reads and output, while `tests/cli.rs` remains the executable-contract
+  suite for inline, file, standard-input, and REPL behavior, output, and exit
+  status.
+- `tests/property_reference.rs` holds a self-contained property-based test
+  that renders generated programs back to source and requires the full
+  pipeline to agree with an independent reference evaluator over checked
+  `i64` arithmetic and ordered immutable `let` bindings.
+- `tests/fuzz_smoke.rs` is a dependency-free fuzzing harness over the public
+  `evaluate` entry point (random token soup, pseudo-programs, arbitrary
+  UTF-8, and edge cases). The long-running test is `#[ignore]`d; CI runs it
+  for a bounded time under a shell `timeout`.
 - `.github/workflows/ci.yml` checks formatting, compilation, tests, Clippy,
-  and Rust documentation on stable Rust, then checks compilation and tests on
-  the minimum supported Rust version. `.github/workflows/release.yml` creates
-  releases from validated version tags and extracts their descriptions from
-  `CHANGELOG.md`.
+  and Rust documentation on stable Rust, runs the bounded fuzz-smoke job, then
+  checks compilation and tests on the minimum supported Rust version.
+  `.github/workflows/release.yml` creates releases from validated version tags,
+  extracts their descriptions from `CHANGELOG.md`, and attaches prebuilt
+  Linux, macOS, and Windows `x86_64` binaries built from the tag.
 
 ## Evolving the language
 

@@ -365,6 +365,7 @@ fn expected_help() -> String {
         "Usage: rusty-buggy-language \"<program>\"\n",
         "       rusty-buggy-language -f <path> | --file <path>\n",
         "       rusty-buggy-language --stdin\n",
+        "       rusty-buggy-language --repl\n",
         "       rusty-buggy-language -h | --help\n",
         "       rusty-buggy-language -V | --version\n",
         "       rusty-buggy-language [--positions] [--input-limit <bytes>] <program>\n",
@@ -373,7 +374,7 @@ fn expected_help() -> String {
         "\n",
         "Evaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, %, // and /* */ comments, parentheses, and prefix -.\n",
         "\n",
-        "The program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input. Source modes are mutually exclusive.\n",
+        "The program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input. Source modes are mutually exclusive. `--repl` reads one program per line from standard input and prints each result.\n",
         "\n",
         "--positions      Also report the line and column of evaluation or syntax errors.\n",
         "--input-limit N  Reject programs longer than N bytes before evaluation.\n",
@@ -545,4 +546,34 @@ fn input_limit_flag_applies_to_file_sources() {
     assert!(!output.status.success());
     assert!(output.stdout.is_empty());
     assert_eq!(output.stderr, b"error: program is too large to evaluate\n");
+}
+
+#[test]
+fn repl_evaluates_one_program_per_line() {
+    let output = run_cli_with_stdin(&["--repl"], b"1 + 2 * 3\n8 / (3 - 3)\nlet x = 4; x * 5\n");
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b">\n7\n>\nerror: division by zero\n>\n20\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn repl_requires_it_as_the_sole_argument() {
+    let output = run_cli(&["--repl", "1"]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        output.stderr,
+        b"error: expected exactly one expression argument\n"
+    );
+}
+
+#[test]
+fn repl_fails_when_no_programs_are_supplied() {
+    let output = run_cli_with_stdin(&["--repl"], b"\n\n");
+
+    assert!(!output.status.success());
+    assert_eq!(output.stdout, b">\n>\n");
+    assert!(output.stderr.is_empty());
 }
