@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added Cargo build caching with `Swatinem/rust-cache` to the CI, release,
   and nightly fuzz workflows. The fuzz job now pins a specific nightly date
   so its cache key remains stable across days.
+- SHA-pinned every GitHub Action in the CI, release, and nightly fuzz
+  workflows (`checkout`, `rust-cache`, `upload/download-artifact`, and
+  `github-script`) for supply-chain hardening; Dependabot keeps them
+  current.
 
 ### Removed
 

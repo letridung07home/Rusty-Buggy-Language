@@ -30,7 +30,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # libFuzzer's sanitizer coverage is only available on the nightly
       # toolchain; the fuzz crate is excluded from the stable and MSRV CI jobs.
@@ -47,7 +47,7 @@ jobs:
       # part of the key so bumping it starts a fresh cache.
       - name: Cache Cargo artifacts
         id: rust-cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: cargo-fuzz-0.13.2
           workspaces: "fuzz -> target"
@@ -71,7 +71,7 @@ jobs:
       # it finds a crash, panic, or hang; attach it to the run for download.
       - name: Upload crash artifact
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: fuzz-crash-input
           path: fuzz/artifacts/
@@ -82,7 +82,7 @@ jobs:
       # issue instead of opening new ones.
       - name: File issue for fuzz failure
         if: failure() && steps.fuzz.outcome == 'failure'
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: |
             const owner = context.repo.owner;
