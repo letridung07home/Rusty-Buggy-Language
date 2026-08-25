@@ -96,7 +96,8 @@ fn prints_version_for_short_flag() {
     let output = run_cli(&["-V"]);
 
     assert!(output.status.success());
-    assert_eq!(output.stdout, b"rusty-buggy-language 0.5.1\n");
+    let expected = format!("rusty-buggy-language {}\n", env!("CARGO_PKG_VERSION"));
+    assert_eq!(output.stdout, expected.as_bytes());
     assert!(output.stderr.is_empty());
 }
 
@@ -105,7 +106,8 @@ fn prints_version_for_long_flag() {
     let output = run_cli(&["--version"]);
 
     assert!(output.status.success());
-    assert_eq!(output.stdout, b"rusty-buggy-language 0.5.1\n");
+    let expected = format!("rusty-buggy-language {}\n", env!("CARGO_PKG_VERSION"));
+    assert_eq!(output.stdout, expected.as_bytes());
     assert!(output.stderr.is_empty());
 }
 
