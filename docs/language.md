@@ -36,6 +36,28 @@ The following flags are recognized only when they are the sole argument:
 | `-h`, `--help` | Print usage and a short feature summary. |
 | `-V`, `--version` | Print `rusty-buggy-language` followed by the package version. |
 
+Two optional configuration flags may appear alongside an inline program, a
+`-f`/`--file` source, or `--stdin`:
+
+| Flag | Behavior |
+| --- | --- |
+| `--positions` | Also report the line and column of an evaluation or syntax error. When set, the CLI prints `error: <message>` to standard error followed by ` at line L, column C`. Without it, error output is exactly the plain `error: <message>` line. |
+| `--input-limit <bytes>` | Reject a source program longer than `<bytes>` bytes before it is parsed or evaluated. The value must be a non-negative integer. |
+
+## Resource limits
+
+The evaluator applies two built-in limits so that adversarial or oversized
+input reports a clear error instead of exhausting memory or the call stack.
+
+- **Nesting depth.** Parenthesized expressions and chains of prefix `-` may not
+  nest deeper than 256 levels. Exceeding the limit reports `program too deeply
+  nested`. Ordinary programs (even with heavy parentheses) are well below this.
+- **Input size.** A program is rejected with `program is too large to
+  evaluate` when it is longer than the configured input limit. The default is
+  `1 MiB`; the CLI `--input-limit <bytes>` flag overrides it for one
+  invocation, and the library exposes the same bound through
+  `evaluate_with_limits`.
+
 ## Grammar
 
 The grammar below uses `*` for zero or more repetitions and `+` for one or
@@ -138,8 +160,13 @@ standard error, prints no result, and exits unsuccessfully. Errors include:
 - integer literals outside the supported range;
 - undefined or forward-referenced variables and duplicate declarations;
 - arithmetic overflow, including negating the minimum integer or dividing it
-  by `-1`; and
-- division by zero.
+  by `-1`;
+- division by zero;
+- a source program longer than the configured input limit; and
+- expressions or prefix `-` chains nested more deeply than the nesting limit.
+
+When `--positions` is supplied, the CLI appends ` at line L, column C` to the
+error so the failure can be located in the source.
 
 For example:
 

@@ -1,7 +1,13 @@
-use crate::error::Error;
+use crate::error::{Error, SourcePosition};
 
-#[derive(Debug, PartialEq)]
-pub(crate) enum Token {
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Token {
+    pub(crate) kind: TokenKind,
+    pub(crate) position: SourcePosition,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum TokenKind {
     Integer(u64),
     Identifier(String),
     Let,
@@ -24,11 +30,18 @@ pub(crate) enum Token {
 pub(crate) struct Lexer<'a> {
     input: &'a str,
     position: usize,
+    line: usize,
+    column: usize,
 }
 
 impl<'a> Lexer<'a> {
     pub(crate) fn new(input: &'a str) -> Self {
-        Self { input, position: 0 }
+        Self {
+            input,
+            position: 0,
+            line: 1,
+            column: 1,
+        }
     }
 
     pub(crate) fn tokenize(mut self) -> Result<Vec<Token>, Error> {
@@ -50,57 +63,78 @@ impl<'a> Lexer<'a> {
                 continue;
             }
 
-            let token = match character {
-                '=' => self.operator_with_optional_equals(Token::Equals, Token::EqualEqual),
-                '<' => self.operator_with_optional_equals(Token::LessThan, Token::LessThanOrEqual),
-                '>' => self
-                    .operator_with_optional_equals(Token::GreaterThan, Token::GreaterThanOrEqual),
+            let position = self.current_position();
+            let kind = match character {
+                '=' => self.operator_with_optional_equals(TokenKind::Equals, TokenKind::EqualEqual),
+                '<' => self
+                    .operator_with_optional_equals(TokenKind::LessThan, TokenKind::LessThanOrEqual),
+                '>' => self.operator_with_optional_equals(
+                    TokenKind::GreaterThan,
+                    TokenKind::GreaterThanOrEqual,
+                ),
                 '!' => {
                     self.advance();
                     if self.current_character() == Some('=') {
                         self.advance();
-                        Token::NotEqual
+                        TokenKind::NotEqual
                     } else {
-                        return Err(Error::new("unexpected character '!'"));
+                        return Err(self.error_at_current("unexpected character '!'"));
                     }
                 }
                 ';' => {
                     self.advance();
-                    Token::Semicolon
+                    TokenKind::Semicolon
                 }
                 '+' => {
                     self.advance();
-                    Token::Plus
+                    TokenKind::Plus
                 }
                 '-' => {
                     self.advance();
-                    Token::Minus
+                    TokenKind::Minus
                 }
                 '*' => {
                     self.advance();
-                    Token::Star
+                    TokenKind::Star
                 }
                 '/' => {
                     self.advance();
-                    Token::Slash
+                    TokenKind::Slash
                 }
                 '(' => {
                     self.advance();
-                    Token::LeftParen
+                    TokenKind::LeftParen
                 }
                 ')' => {
                     self.advance();
-                    Token::RightParen
+                    TokenKind::RightParen
                 }
-                _ => return Err(Error::new(format!("unexpected character '{character}'"))),
+                _ => {
+                    return Err(self.error_at_current(format!("unexpected character '{character}'")))
+                }
             };
-            tokens.push(token);
+            tokens.push(Token { kind, position });
         }
 
         Ok(tokens)
     }
 
-    fn operator_with_optional_equals(&mut self, single: Token, compound: Token) -> Token {
+    fn error_at_current(&self, message: impl Into<String>) -> Error {
+        Error::at(message, self.current_position())
+    }
+
+    fn current_position(&self) -> SourcePosition {
+        SourcePosition {
+            line: self.line,
+            column: self.column,
+        }
+    }
+
+    fn operator_with_optional_equals(
+        &mut self,
+        single: TokenKind,
+        compound: TokenKind,
+    ) -> TokenKind {
         self.advance();
         if self.current_character() == Some('=') {
             self.advance();
@@ -111,6 +145,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn integer_literal(&mut self) -> Result<Token, Error> {
+        let position = self.current_position();
         let mut value = 0_u64;
 
         while let Some(character) = self.current_character() {
@@ -122,15 +157,19 @@ impl<'a> Lexer<'a> {
             value = value
                 .checked_mul(10)
                 .and_then(|value| value.checked_add(digit))
-                .ok_or_else(|| Error::new("integer literal out of range"))?;
+                .ok_or_else(|| self.error_at_current("integer literal out of range"))?;
             self.advance();
         }
 
-        Ok(Token::Integer(value))
+        Ok(Token {
+            kind: TokenKind::Integer(value),
+            position,
+        })
     }
 
     fn identifier(&mut self) -> Token {
         let start = self.position;
+        let position = self.current_position();
 
         while let Some(character) = self.current_character() {
             if !character.is_ascii_alphanumeric() && character != '_' {
@@ -140,11 +179,13 @@ impl<'a> Lexer<'a> {
         }
 
         let name = &self.input[start..self.position];
-        if name == "let" {
-            Token::Let
+        let kind = if name == "let" {
+            TokenKind::Let
         } else {
-            Token::Identifier(name.to_owned())
-        }
+            TokenKind::Identifier(name.to_owned())
+        };
+
+        Token { kind, position }
     }
 
     fn current_character(&self) -> Option<char> {
@@ -154,54 +195,86 @@ impl<'a> Lexer<'a> {
     fn advance(&mut self) {
         if let Some(character) = self.current_character() {
             self.position += character.len_utf8();
+            if character == '\n' {
+                self.line += 1;
+                self.column = 1;
+            } else {
+                self.column += 1;
+            }
         }
     }
 }
 
 impl Token {
-    pub(crate) fn name(&self) -> &'static str {
-        match self {
-            Self::Integer(_) => "integer literal",
-            Self::Identifier(_) => "identifier",
-            Self::Let => "'let'",
-            Self::Equals => "'='",
-            Self::LessThan => "'<'",
-            Self::LessThanOrEqual => "'<='",
-            Self::GreaterThan => "'>'",
-            Self::GreaterThanOrEqual => "'>='",
-            Self::EqualEqual => "'=='",
-            Self::NotEqual => "'!='",
-            Self::Semicolon => "';'",
-            Self::Plus => "'+'",
-            Self::Minus => "'-'",
-            Self::Star => "'*'",
-            Self::Slash => "'/'",
-            Self::LeftParen => "'('",
-            Self::RightParen => "')'",
+    pub(crate) fn kind_name(&self) -> &'static str {
+        match &self.kind {
+            TokenKind::Integer(_) => "integer literal",
+            TokenKind::Identifier(_) => "identifier",
+            TokenKind::Let => "'let'",
+            TokenKind::Equals => "'='",
+            TokenKind::LessThan => "'<'",
+            TokenKind::LessThanOrEqual => "'<='",
+            TokenKind::GreaterThan => "'>'",
+            TokenKind::GreaterThanOrEqual => "'>='",
+            TokenKind::EqualEqual => "'=='",
+            TokenKind::NotEqual => "'!='",
+            TokenKind::Semicolon => "';'",
+            TokenKind::Plus => "'+'",
+            TokenKind::Minus => "'-'",
+            TokenKind::Star => "'*'",
+            TokenKind::Slash => "'/'",
+            TokenKind::LeftParen => "'('",
+            TokenKind::RightParen => "')'",
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Lexer, Token};
+    use super::Lexer;
+    use crate::error::SourcePosition;
+    use crate::lexer::TokenKind;
 
     #[test]
     fn tokenizes_the_language_symbols_and_identifiers() {
+        let tokens = Lexer::new("let _value2 = 1 <= 2 != 3;").tokenize();
+        let kinds: Vec<TokenKind> = tokens
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|token| token.kind.clone())
+            .collect();
+
         assert_eq!(
-            Lexer::new("let _value2 = 1 <= 2 != 3;").tokenize(),
-            Ok(vec![
-                Token::Let,
-                Token::Identifier("_value2".to_owned()),
-                Token::Equals,
-                Token::Integer(1),
-                Token::LessThanOrEqual,
-                Token::Integer(2),
-                Token::NotEqual,
-                Token::Integer(3),
-                Token::Semicolon,
-            ])
+            kinds,
+            vec![
+                TokenKind::Let,
+                TokenKind::Identifier("_value2".to_owned()),
+                TokenKind::Equals,
+                TokenKind::Integer(1),
+                TokenKind::LessThanOrEqual,
+                TokenKind::Integer(2),
+                TokenKind::NotEqual,
+                TokenKind::Integer(3),
+                TokenKind::Semicolon,
+            ]
         );
+    }
+
+    #[test]
+    fn tracks_line_and_column_positions_across_multiple_lines() {
+        let tokens = Lexer::new("let a = 1;\n  a + 2").tokenize().unwrap();
+
+        // 'let' at line 1, column 1
+        assert_eq!(tokens[0].position, SourcePosition { line: 1, column: 1 });
+        // 'a' at line 1, column 5
+        assert_eq!(tokens[1].position, SourcePosition { line: 1, column: 5 });
+        // 'a' after newline at line 2, column 3
+        assert_eq!(tokens[5].position, SourcePosition { line: 2, column: 3 });
+        // '+' at line 2, column 5
+        assert_eq!(tokens[6].position, SourcePosition { line: 2, column: 5 });
+        // '2' at line 2, column 7
+        assert_eq!(tokens[7].position, SourcePosition { line: 2, column: 7 });
     }
 
     #[test]
@@ -210,6 +283,17 @@ mod tests {
             Lexer::new("1 @ 2").tokenize().unwrap_err().to_string(),
             "unexpected character '@'"
         );
+    }
+
+    #[test]
+    fn reports_the_position_of_an_invalid_character() {
+        let error = Lexer::new("1 + @ 2").tokenize().unwrap_err();
+        // '@' is at line 1, column 5 (1-based).
+        assert_eq!(
+            error.position(),
+            Some(SourcePosition { line: 1, column: 5 })
+        );
+        assert_eq!(error.to_string(), "unexpected character '@'");
     }
 
     #[test]

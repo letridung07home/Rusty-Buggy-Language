@@ -1,10 +1,16 @@
 use crate::ast::{BinaryOperator, Declaration, Expression, Program};
-use crate::error::Error;
-use crate::lexer::Token;
+use crate::error::{Error, SourcePosition};
+use crate::lexer::{Token, TokenKind};
+
+/// Maximum recursive nesting depth the parser accepts before refusing input.
+/// This is intentionally far below the thread stack budget so adversarial
+/// input reports a clear error instead of overflowing the stack.
+const MAX_DEPTH: usize = 256;
 
 pub(crate) struct Parser<'a> {
     tokens: &'a [Token],
     position: usize,
+    depth: usize,
 }
 
 impl<'a> Parser<'a> {
@@ -12,44 +18,80 @@ impl<'a> Parser<'a> {
         Self {
             tokens,
             position: 0,
+            depth: 0,
         }
     }
 
     pub(crate) fn parse(mut self) -> Result<Program, Error> {
         let mut declarations = Vec::new();
 
-        while matches!(self.peek(), Some(Token::Let)) {
+        while matches!(self.peek_kind(), Some(TokenKind::Let)) {
+            let declaration_position = self.peek().map(|token| token.position);
             self.advance();
 
             let name = match self.advance() {
-                Some(Token::Identifier(name)) => name.to_owned(),
-                _ => return Err(Error::new("expected a variable name after 'let'")),
+                Some(Token {
+                    kind: TokenKind::Identifier(name),
+                    ..
+                }) => name.clone(),
+                Some(token) => {
+                    return Err(Error::at(
+                        "expected a variable name after 'let'",
+                        token.position,
+                    ))
+                }
+                None => return Err(self.error_here("expected a variable name after 'let'")),
             };
 
-            if !matches!(self.advance(), Some(Token::Equals)) {
-                return Err(Error::new(format!(
-                    "expected '=' after variable name '{name}'"
-                )));
+            let equals = self.advance();
+            if !matches!(
+                equals,
+                Some(Token {
+                    kind: TokenKind::Equals,
+                    ..
+                })
+            ) {
+                let position = equals.map(|token| token.position).or(declaration_position);
+                return Err(Error::at(
+                    format!("expected '=' after variable name '{name}'"),
+                    position.unwrap_or(SourcePosition { line: 1, column: 1 }),
+                ));
             }
 
             let initializer = self.parse_expression()?;
 
-            if !matches!(self.advance(), Some(Token::Semicolon)) {
-                return Err(Error::new(format!(
-                    "expected ';' after declaration of '{name}'"
-                )));
+            let semicolon = self.advance();
+            if !matches!(
+                semicolon,
+                Some(Token {
+                    kind: TokenKind::Semicolon,
+                    ..
+                })
+            ) {
+                let position = semicolon
+                    .map(|token| token.position)
+                    .or(declaration_position);
+                return Err(Error::at(
+                    format!("expected ';' after declaration of '{name}'"),
+                    position.unwrap_or(SourcePosition { line: 1, column: 1 }),
+                ));
             }
 
             if declarations
                 .iter()
                 .any(|declaration: &Declaration| declaration.name == name)
             {
-                return Err(Error::new(format!(
-                    "duplicate variable declaration: '{name}'"
-                )));
+                return Err(Error::at(
+                    format!("duplicate variable declaration: '{name}'"),
+                    declaration_position.unwrap_or(SourcePosition { line: 1, column: 1 }),
+                ));
             }
 
-            declarations.push(Declaration { name, initializer });
+            declarations.push(Declaration {
+                name,
+                initializer,
+                position: declaration_position,
+            });
         }
 
         if self.tokens.is_empty() || self.peek().is_none() {
@@ -62,13 +104,13 @@ impl<'a> Parser<'a> {
         let expression = self.parse_expression()?;
 
         if let Some(token) = self.peek() {
-            if *token == Token::RightParen {
-                return Err(Error::new("unmatched ')'"));
+            if token.kind == TokenKind::RightParen {
+                return Err(Error::at("unmatched ')'", token.position));
             }
-            return Err(Error::new(format!(
-                "unexpected trailing token: {}",
-                token.name()
-            )));
+            return Err(Error::at(
+                format!("unexpected trailing token: {}", token.kind_name()),
+                token.position,
+            ));
         }
 
         Ok(Program {
@@ -78,7 +120,10 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expression(&mut self) -> Result<Expression, Error> {
-        self.parse_comparison()
+        self.enter()?;
+        let expression = self.parse_comparison();
+        self.leave();
+        expression
     }
 
     fn parse_comparison(&mut self) -> Result<Expression, Error> {
@@ -87,14 +132,16 @@ impl<'a> Parser<'a> {
         if let Some(operator) = self.comparison_operator() {
             self.advance();
             let right = self.parse_additive()?;
+            let position = expression.position();
             expression = Expression::Binary {
                 operator,
                 left: Box::new(expression),
                 right: Box::new(right),
+                position,
             };
 
             if self.comparison_operator().is_some() {
-                return Err(Error::new("comparison operators cannot be chained"));
+                return Err(self.error_here("comparison operators cannot be chained"));
             }
         }
 
@@ -105,17 +152,19 @@ impl<'a> Parser<'a> {
         let mut expression = self.parse_multiplicative()?;
 
         loop {
-            let operator = match self.peek() {
-                Some(Token::Plus) => BinaryOperator::Add,
-                Some(Token::Minus) => BinaryOperator::Subtract,
+            let operator = match self.peek_kind() {
+                Some(TokenKind::Plus) => BinaryOperator::Add,
+                Some(TokenKind::Minus) => BinaryOperator::Subtract,
                 _ => break,
             };
+            let position = self.peek().map(|token| token.position);
             self.advance();
             let right = self.parse_multiplicative()?;
             expression = Expression::Binary {
                 operator,
                 left: Box::new(expression),
                 right: Box::new(right),
+                position,
             };
         }
 
@@ -126,17 +175,19 @@ impl<'a> Parser<'a> {
         let mut expression = self.parse_unary()?;
 
         loop {
-            let operator = match self.peek() {
-                Some(Token::Star) => BinaryOperator::Multiply,
-                Some(Token::Slash) => BinaryOperator::Divide,
+            let operator = match self.peek_kind() {
+                Some(TokenKind::Star) => BinaryOperator::Multiply,
+                Some(TokenKind::Slash) => BinaryOperator::Divide,
                 _ => break,
             };
+            let position = self.peek().map(|token| token.position);
             self.advance();
             let right = self.parse_unary()?;
             expression = Expression::Binary {
                 operator,
                 left: Box::new(expression),
                 right: Box::new(right),
+                position,
             };
         }
 
@@ -144,46 +195,98 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_unary(&mut self) -> Result<Expression, Error> {
-        if matches!(self.peek(), Some(Token::Minus)) {
+        if matches!(self.peek_kind(), Some(TokenKind::Minus)) {
+            let position = self.peek().map(|token| token.position);
             self.advance();
-            let expression = self.parse_unary()?;
-            return Ok(Expression::UnaryNegation(Box::new(expression)));
+            let operand = self.parse_unary_nested()?;
+            return Ok(Expression::UnaryNegation {
+                operand: Box::new(operand),
+                position,
+            });
         }
 
         self.parse_primary()
     }
 
+    fn parse_unary_nested(&mut self) -> Result<Expression, Error> {
+        self.enter()?;
+        let expression = self.parse_unary();
+        self.leave();
+        expression
+    }
+
     fn parse_primary(&mut self) -> Result<Expression, Error> {
         match self.advance() {
-            Some(Token::Integer(value)) => Ok(Expression::Literal(*value)),
-            Some(Token::Identifier(name)) => Ok(Expression::Variable(name.to_owned())),
-            Some(Token::LeftParen) => {
+            Some(Token {
+                kind: TokenKind::Integer(value),
+                position,
+            }) => Ok(Expression::Literal {
+                value: *value,
+                position: Some(*position),
+            }),
+            Some(Token {
+                kind: TokenKind::Identifier(name),
+                position,
+            }) => Ok(Expression::Variable {
+                name: name.clone(),
+                position: Some(*position),
+            }),
+            Some(Token {
+                kind: TokenKind::LeftParen,
+                ..
+            }) => {
                 let expression = self.parse_expression()?;
                 match self.advance() {
-                    Some(Token::RightParen) => Ok(expression),
-                    _ => Err(Error::new("unmatched '('")),
+                    Some(Token {
+                        kind: TokenKind::RightParen,
+                        ..
+                    }) => Ok(expression),
+                    Some(token) => Err(Error::at("unmatched '('", token.position)),
+                    None => Err(self.error_here("unmatched '('")),
                 }
             }
-            Some(Token::RightParen) => Err(Error::new("unexpected ')'")),
-            Some(Token::Let)
-            | Some(Token::Equals)
-            | Some(Token::LessThan)
-            | Some(Token::LessThanOrEqual)
-            | Some(Token::GreaterThan)
-            | Some(Token::GreaterThanOrEqual)
-            | Some(Token::EqualEqual)
-            | Some(Token::NotEqual)
-            | Some(Token::Semicolon)
-            | Some(Token::Plus)
-            | Some(Token::Minus)
-            | Some(Token::Star)
-            | Some(Token::Slash) => Err(Error::new("expected an expression")),
-            None => Err(Error::new("expected an expression")),
+            Some(token) => match &token.kind {
+                TokenKind::RightParen => Err(Error::at("unexpected ')'", token.position)),
+                TokenKind::Let
+                | TokenKind::Equals
+                | TokenKind::LessThan
+                | TokenKind::LessThanOrEqual
+                | TokenKind::GreaterThan
+                | TokenKind::GreaterThanOrEqual
+                | TokenKind::EqualEqual
+                | TokenKind::NotEqual
+                | TokenKind::Semicolon
+                | TokenKind::Plus
+                | TokenKind::Minus
+                | TokenKind::Star
+                | TokenKind::Slash => Err(Error::at("expected an expression", token.position)),
+                TokenKind::Integer(_) | TokenKind::Identifier(_) | TokenKind::LeftParen => {
+                    // Unreachable: these arms are handled above.
+                    Err(Error::at("expected an expression", token.position))
+                }
+            },
+            None => Err(self.error_here("expected an expression")),
         }
+    }
+
+    fn enter(&mut self) -> Result<(), Error> {
+        self.depth += 1;
+        if self.depth > MAX_DEPTH {
+            return Err(Error::new("program too deeply nested"));
+        }
+        Ok(())
+    }
+
+    fn leave(&mut self) {
+        self.depth -= 1;
     }
 
     fn peek(&self) -> Option<&Token> {
         self.tokens.get(self.position)
+    }
+
+    fn peek_kind(&self) -> Option<&TokenKind> {
+        self.peek().map(|token| &token.kind)
     }
 
     fn advance(&mut self) -> Option<&Token> {
@@ -194,14 +297,21 @@ impl<'a> Parser<'a> {
         token
     }
 
-    fn comparison_operator(&self) -> Option<BinaryOperator> {
+    fn error_here(&self, message: impl Into<String>) -> Error {
         match self.peek() {
-            Some(Token::LessThan) => Some(BinaryOperator::LessThan),
-            Some(Token::LessThanOrEqual) => Some(BinaryOperator::LessThanOrEqual),
-            Some(Token::GreaterThan) => Some(BinaryOperator::GreaterThan),
-            Some(Token::GreaterThanOrEqual) => Some(BinaryOperator::GreaterThanOrEqual),
-            Some(Token::EqualEqual) => Some(BinaryOperator::Equal),
-            Some(Token::NotEqual) => Some(BinaryOperator::NotEqual),
+            Some(token) => Error::at(message, token.position),
+            None => Error::new(message),
+        }
+    }
+
+    fn comparison_operator(&self) -> Option<BinaryOperator> {
+        match self.peek_kind() {
+            Some(TokenKind::LessThan) => Some(BinaryOperator::LessThan),
+            Some(TokenKind::LessThanOrEqual) => Some(BinaryOperator::LessThanOrEqual),
+            Some(TokenKind::GreaterThan) => Some(BinaryOperator::GreaterThan),
+            Some(TokenKind::GreaterThanOrEqual) => Some(BinaryOperator::GreaterThanOrEqual),
+            Some(TokenKind::EqualEqual) => Some(BinaryOperator::Equal),
+            Some(TokenKind::NotEqual) => Some(BinaryOperator::NotEqual),
             _ => None,
         }
     }
@@ -209,12 +319,34 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::Parser;
+    use super::{Parser, MAX_DEPTH};
     use crate::lexer::Lexer;
 
     fn parse_error(input: &str) -> String {
         let tokens = Lexer::new(input).tokenize().unwrap();
         Parser::new(&tokens).parse().unwrap_err().to_string()
+    }
+
+    fn parses_ok(input: &str) -> bool {
+        let tokens = Lexer::new(input).tokenize().unwrap();
+        Parser::new(&tokens).parse().is_ok()
+    }
+
+    fn parse_error_positions(input: &str) -> Vec<(usize, usize)> {
+        let mut positions = Vec::new();
+        let tokens = Lexer::new(input).tokenize().unwrap();
+        match Parser::new(&tokens).parse() {
+            Ok(_) => {}
+            Err(error) => {
+                positions.push(
+                    error
+                        .position()
+                        .map(|position| (position.line, position.column))
+                        .unwrap_or((0, 0)),
+                );
+            }
+        }
+        positions
     }
 
     #[test]
@@ -228,6 +360,19 @@ mod tests {
         assert_eq!(parse_error("+1"), "expected an expression");
         assert_eq!(parse_error("1 < = 2"), "expected an expression");
         assert_eq!(parse_error("1 > = 2"), "expected an expression");
+    }
+
+    #[test]
+    fn reports_the_position_of_an_error_within_a_line() {
+        // The offending '*' where an expression was expected is at line 1,
+        // column 5 of "1 + * 2".
+        assert_eq!(parse_error_positions("1 + * 2"), vec![(1, 5)]);
+    }
+
+    #[test]
+    fn reports_the_position_of_an_error_across_lines() {
+        // The trailing '3' at line 2, column 5 is the offending token.
+        assert_eq!(parse_error_positions("1 +\n  2 3"), vec![(2, 5)]);
     }
 
     #[test]
@@ -291,5 +436,33 @@ mod tests {
             parse_error("let value = 1; let value = 2; value"),
             "duplicate variable declaration: 'value'"
         );
+    }
+
+    #[test]
+    fn accepts_deep_parentheses_within_the_limit() {
+        let depth = 200;
+        let input = format!("{}{}{}", "(".repeat(depth), "1", ")".repeat(depth));
+        assert!(parses_ok(&input));
+    }
+
+    #[test]
+    fn rejects_parentheses_nesting_beyond_the_limit() {
+        let depth = MAX_DEPTH + 1;
+        let input = format!("{}{}{}", "(".repeat(depth), "1", ")".repeat(depth));
+        assert_eq!(parse_error(&input), "program too deeply nested");
+    }
+
+    #[test]
+    fn rejects_unary_minus_chains_beyond_the_limit() {
+        let depth = MAX_DEPTH + 1;
+        let input = format!("{}1", "-".repeat(depth));
+        assert_eq!(parse_error(&input), "program too deeply nested");
+    }
+
+    #[test]
+    fn accepts_unary_minus_chains_within_the_limit() {
+        let depth = 100;
+        let input = format!("{}1", "-".repeat(depth));
+        assert!(parses_ok(&input));
     }
 }
