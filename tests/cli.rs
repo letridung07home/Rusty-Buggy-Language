@@ -20,12 +20,18 @@ fn run_cli_with_stdin(arguments: &[&str], input: &[u8]) -> Output {
         .spawn()
         .expect("failed to execute the compiled CLI");
 
-    child
+    let mut input_handle = child
         .stdin
         .take()
-        .expect("failed to open the CLI standard input")
-        .write_all(input)
-        .expect("failed to write the CLI standard input");
+        .expect("failed to open the CLI standard input");
+    if let Err(write_error) = input_handle.write_all(input) {
+        // The CLI rejects conflicting arguments before reading standard input
+        // and may have already exited, in which case a broken pipe is expected
+        // rather than a test failure.
+        if write_error.kind() != std::io::ErrorKind::BrokenPipe {
+            panic!("failed to write the CLI standard input: {write_error}");
+        }
+    }
 
     child
         .wait_with_output()
