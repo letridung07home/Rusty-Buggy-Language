@@ -19,12 +19,12 @@ fn evaluate_expression(
     variables: &HashMap<String, i64>,
 ) -> Result<i64, Error> {
     match expression {
-        Expression::Literal { value, position } => i64::try_from(*value).map_err(|_| {
-            positioned_error("integer literal out of range", *position)
-        }),
-        Expression::Variable { name, position } => variables.get(name).copied().ok_or_else(|| {
-            positioned_error(format!("undefined variable: '{name}'"), *position)
-        }),
+        Expression::Literal { value, position } => i64::try_from(*value)
+            .map_err(|_| positioned_error("integer literal out of range", *position)),
+        Expression::Variable { name, position } => variables
+            .get(name)
+            .copied()
+            .ok_or_else(|| positioned_error(format!("undefined variable: '{name}'"), *position)),
         Expression::UnaryNegation { operand, position } => {
             if let Expression::Literal { value, .. } = operand.as_ref() {
                 if *value == (i64::MAX as u64) + 1 {
@@ -46,22 +46,21 @@ fn evaluate_expression(
             let right = evaluate_expression(right, variables)?;
 
             match operator {
-                BinaryOperator::Add => left.checked_add(right).ok_or_else(|| {
-                    positioned_error("integer addition overflow", *position)
-                }),
-                BinaryOperator::Subtract => left.checked_sub(right).ok_or_else(|| {
-                    positioned_error("integer subtraction overflow", *position)
-                }),
-                BinaryOperator::Multiply => left.checked_mul(right).ok_or_else(|| {
-                    positioned_error("integer multiplication overflow", *position)
-                }),
+                BinaryOperator::Add => left
+                    .checked_add(right)
+                    .ok_or_else(|| positioned_error("integer addition overflow", *position)),
+                BinaryOperator::Subtract => left
+                    .checked_sub(right)
+                    .ok_or_else(|| positioned_error("integer subtraction overflow", *position)),
+                BinaryOperator::Multiply => left
+                    .checked_mul(right)
+                    .ok_or_else(|| positioned_error("integer multiplication overflow", *position)),
                 BinaryOperator::Divide => {
                     if right == 0 {
                         Err(positioned_error("division by zero", *position))
                     } else {
-                        left.checked_div(right).ok_or_else(|| {
-                            positioned_error("integer division overflow", *position)
-                        })
+                        left.checked_div(right)
+                            .ok_or_else(|| positioned_error("integer division overflow", *position))
                     }
                 }
                 BinaryOperator::LessThan => Ok(if left < right { 1 } else { 0 }),
@@ -75,10 +74,7 @@ fn evaluate_expression(
     }
 }
 
-fn positioned_error(
-    message: impl Into<String>,
-    position: Option<SourcePosition>,
-) -> Error {
+fn positioned_error(message: impl Into<String>, position: Option<SourcePosition>) -> Error {
     match position {
         Some(position) => Error::at(message, position),
         None => Error::new(message),

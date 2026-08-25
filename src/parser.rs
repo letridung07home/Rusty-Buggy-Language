@@ -30,7 +30,10 @@ impl<'a> Parser<'a> {
             self.advance();
 
             let name = match self.advance() {
-                Some(Token { kind: TokenKind::Identifier(name), .. }) => name.clone(),
+                Some(Token {
+                    kind: TokenKind::Identifier(name),
+                    ..
+                }) => name.clone(),
                 Some(token) => {
                     return Err(Error::at(
                         "expected a variable name after 'let'",
@@ -41,7 +44,13 @@ impl<'a> Parser<'a> {
             };
 
             let equals = self.advance();
-            if !matches!(equals, Some(Token { kind: TokenKind::Equals, .. })) {
+            if !matches!(
+                equals,
+                Some(Token {
+                    kind: TokenKind::Equals,
+                    ..
+                })
+            ) {
                 let position = equals.map(|token| token.position).or(declaration_position);
                 return Err(Error::at(
                     format!("expected '=' after variable name '{name}'"),
@@ -59,7 +68,9 @@ impl<'a> Parser<'a> {
                     ..
                 })
             ) {
-                let position = semicolon.map(|token| token.position).or(declaration_position);
+                let position = semicolon
+                    .map(|token| token.position)
+                    .or(declaration_position);
                 return Err(Error::at(
                     format!("expected ';' after declaration of '{name}'"),
                     position.unwrap_or(SourcePosition { line: 1, column: 1 }),
@@ -248,10 +259,10 @@ impl<'a> Parser<'a> {
                 | TokenKind::Plus
                 | TokenKind::Minus
                 | TokenKind::Star
-                | TokenKind::Slash => Err(self.error_here("expected an expression")),
+                | TokenKind::Slash => Err(Error::at("expected an expression", token.position)),
                 TokenKind::Integer(_) | TokenKind::Identifier(_) | TokenKind::LeftParen => {
                     // Unreachable: these arms are handled above.
-                    Err(self.error_here("expected an expression"))
+                    Err(Error::at("expected an expression", token.position))
                 }
             },
             None => Err(self.error_here("expected an expression")),
@@ -353,8 +364,9 @@ mod tests {
 
     #[test]
     fn reports_the_position_of_an_error_within_a_line() {
-        // The '+' is at line 1, column 3 of "1 + * 2".
-        assert_eq!(parse_error_positions("1 + * 2"), vec![(1, 3)]);
+        // The offending '*' where an expression was expected is at line 1,
+        // column 5 of "1 + * 2".
+        assert_eq!(parse_error_positions("1 + * 2"), vec![(1, 5)]);
     }
 
     #[test]

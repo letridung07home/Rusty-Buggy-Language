@@ -408,10 +408,7 @@ fn input_limit_flag_rejects_oversized_inline_programs() {
 
     assert!(!output.status.success());
     assert!(output.stdout.is_empty());
-    assert_eq!(
-        output.stderr,
-        b"error: program is too large to evaluate\n"
-    );
+    assert_eq!(output.stderr, b"error: program is too large to evaluate\n");
 }
 
 #[test]
@@ -452,8 +449,5 @@ fn input_limit_flag_applies_to_file_sources() {
 
     assert!(!output.status.success());
     assert!(output.stdout.is_empty());
-    assert_eq!(
-        output.stderr,
-        b"error: program is too large to evaluate\n"
-    );
+    assert_eq!(output.stderr, b"error: program is too large to evaluate\n");
 }

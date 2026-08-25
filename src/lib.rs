@@ -47,7 +47,7 @@ pub fn evaluate_with_limits(program: &str, limits: &Limits) -> Result<i64, Error
 
 #[cfg(test)]
 mod tests {
-    use super::{evaluate, evaluate_with_limits, DEFAULT_MAX_INPUT_BYTES, Limits};
+    use super::{evaluate, evaluate_with_limits, Limits, DEFAULT_MAX_INPUT_BYTES};
 
     #[test]
     fn evaluates_program_through_the_library_facade() {
@@ -77,21 +77,19 @@ mod tests {
 
     #[test]
     fn rejects_input_larger_than_the_limit() {
-        let limits = Limits {
-            max_input_bytes: 5,
-        };
+        let limits = Limits { max_input_bytes: 5 };
 
         assert_eq!(
-            evaluate_with_limits("1 + 2 + 3 + 4", &limits).unwrap_err().to_string(),
+            evaluate_with_limits("1 + 2 + 3 + 4", &limits)
+                .unwrap_err()
+                .to_string(),
             "program is too large to evaluate"
         );
     }
 
     #[test]
     fn accepts_input_at_the_limit_boundary() {
-        let limits = Limits {
-            max_input_bytes: 9,
-        };
+        let limits = Limits { max_input_bytes: 9 };
 
         // "1 + 2 + 3" is exactly 9 bytes.
         assert_eq!(evaluate_with_limits("1 + 2 + 3", &limits), Ok(6));

@@ -66,10 +66,8 @@ impl<'a> Lexer<'a> {
             let position = self.current_position();
             let kind = match character {
                 '=' => self.operator_with_optional_equals(TokenKind::Equals, TokenKind::EqualEqual),
-                '<' => self.operator_with_optional_equals(
-                    TokenKind::LessThan,
-                    TokenKind::LessThanOrEqual,
-                ),
+                '<' => self
+                    .operator_with_optional_equals(TokenKind::LessThan, TokenKind::LessThanOrEqual),
                 '>' => self.operator_with_optional_equals(
                     TokenKind::GreaterThan,
                     TokenKind::GreaterThanOrEqual,
@@ -111,7 +109,9 @@ impl<'a> Lexer<'a> {
                     self.advance();
                     TokenKind::RightParen
                 }
-                _ => return Err(self.error_at_current(format!("unexpected character '{character}'"))),
+                _ => {
+                    return Err(self.error_at_current(format!("unexpected character '{character}'")))
+                }
             };
             tokens.push(Token { kind, position });
         }
@@ -130,7 +130,11 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn operator_with_optional_equals(&mut self, single: TokenKind, compound: TokenKind) -> TokenKind {
+    fn operator_with_optional_equals(
+        &mut self,
+        single: TokenKind,
+        compound: TokenKind,
+    ) -> TokenKind {
         self.advance();
         if self.current_character() == Some('=') {
             self.advance();
@@ -266,11 +270,11 @@ mod tests {
         // 'a' at line 1, column 5
         assert_eq!(tokens[1].position, SourcePosition { line: 1, column: 5 });
         // 'a' after newline at line 2, column 3
-        assert_eq!(tokens[6].position, SourcePosition { line: 2, column: 3 });
+        assert_eq!(tokens[5].position, SourcePosition { line: 2, column: 3 });
         // '+' at line 2, column 5
-        assert_eq!(tokens[7].position, SourcePosition { line: 2, column: 5 });
+        assert_eq!(tokens[6].position, SourcePosition { line: 2, column: 5 });
         // '2' at line 2, column 7
-        assert_eq!(tokens[8].position, SourcePosition { line: 2, column: 7 });
+        assert_eq!(tokens[7].position, SourcePosition { line: 2, column: 7 });
     }
 
     #[test]
@@ -285,7 +289,10 @@ mod tests {
     fn reports_the_position_of_an_invalid_character() {
         let error = Lexer::new("1 + @ 2").tokenize().unwrap_err();
         // '@' is at line 1, column 5 (1-based).
-        assert_eq!(error.position(), Some(SourcePosition { line: 1, column: 5 }));
+        assert_eq!(
+            error.position(),
+            Some(SourcePosition { line: 1, column: 5 })
+        );
         assert_eq!(error.to_string(), "unexpected character '@'");
     }
 

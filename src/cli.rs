@@ -150,9 +150,9 @@ fn parse_invocation(args: &[OsString]) -> Result<Invocation, String> {
         }
 
         if as_str == Some("--input-limit") {
-            let value = args.get(index + 1).ok_or_else(|| {
-                "missing value after --input-limit".to_owned()
-            })?;
+            let value = args
+                .get(index + 1)
+                .ok_or_else(|| "missing value after --input-limit".to_owned())?;
             let value_str = value
                 .to_str()
                 .ok_or_else(|| "--input-limit value must be valid UTF-8".to_owned())?;
