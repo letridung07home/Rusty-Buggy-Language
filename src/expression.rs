@@ -227,8 +227,9 @@ impl Token {
 
 fn evaluate_expression(expression: &Expression) -> Result<i64, String> {
     match expression {
-        Expression::Literal(value) => i64::try_from(*value)
-            .map_err(|_| "integer literal out of range".to_owned()),
+        Expression::Literal(value) => {
+            i64::try_from(*value).map_err(|_| "integer literal out of range".to_owned())
+        }
         Expression::UnaryNegation(operand) => {
             if let Expression::Literal(value) = operand.as_ref() {
                 if *value == (i64::MAX as u64) + 1 {
@@ -432,10 +433,7 @@ mod tests {
     #[test]
     fn rejects_unary_plus() {
         assert_eq!(evaluate("+1"), Err("expected an expression".to_owned()));
-        assert_eq!(
-            evaluate("1 * +2"),
-            Err("expected an expression".to_owned())
-        );
+        assert_eq!(evaluate("1 * +2"), Err("expected an expression".to_owned()));
     }
 
     #[test]
