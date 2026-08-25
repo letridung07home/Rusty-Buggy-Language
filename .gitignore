@@ -25,3 +25,4 @@ rustc-ice-*.txt
 
 # Freebuff coding agent
 /.freebuff
+AGENTS.md
