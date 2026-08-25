@@ -82,7 +82,8 @@ source selection and complete UTF-8 input read
   on the minimum supported Rust version.
   `.github/workflows/nightly-fuzz.yml` runs the coverage-guided `cargo-fuzz`
   target against `main` for 30 minutes every night, failing when the fuzzer
-  finds a crash, panic, overflow, or hang. It can also be dispatched
+  finds a crash, panic, overflow, or hang; such failures file a GitHub issue
+  automatically with the crashing input attached. It can also be dispatched
   manually with a configurable duration in minutes (default 1) for a quick
   check.
   `.github/workflows/release.yml` creates releases from validated version tags,

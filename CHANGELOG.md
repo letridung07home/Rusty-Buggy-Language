@@ -14,7 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   arithmetic edge cases, plus a nightly GitHub Actions workflow that fuzzes
   it against `main` for 30 minutes and fails when the fuzzer finds a crash,
   panic, or hang. The workflow can also be triggered manually with a
-  configurable run duration (default 1 minute).
+  configurable run duration (default 1 minute), and it files a GitHub issue
+  automatically when it finds a crash, panic, or hang, with the crashing
+  input attached as a run artifact and repeated failures deduplicated onto
+  one issue.
 
 ### Changed
 

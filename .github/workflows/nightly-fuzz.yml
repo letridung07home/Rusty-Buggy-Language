@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   fuzz:
@@ -62,5 +63,62 @@ jobs:
       # clean exit means no crash, panic, overflow, or hang was found in the
       # window.
       - name: Fuzz the evaluate entry point
+        id: fuzz
         run: cargo fuzz run evaluate -- -max_total_time=$(( DURATION_MINUTES * 60 )) -timeout=10 -print_final_stats=1
         shell: bash
+
+      # libFuzzer writes the crashing input to fuzz/artifacts/<target>/ when
+      # it finds a crash, panic, or hang; attach it to the run for download.
+      - name: Upload crash artifact
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-crash-input
+          path: fuzz/artifacts/
+          if-no-files-found: warn
+
+      # File an issue so a crash found overnight is actionable. The title is
+      # deduplicated, so repeated nightly failures comment on the existing
+      # issue instead of opening new ones.
+      - name: File issue for fuzz failure
+        if: failure() && steps.fuzz.outcome == 'failure'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const title = "Nightly fuzz found a crash, panic, or hang";
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const body = [
+              `The nightly coverage-guided fuzz run failed on \`main\` at commit \`${context.sha.slice(0, 7)}\`.`,
+              "",
+              `- Workflow run: ${runUrl}`,
+              "- Fuzz target: `evaluate`",
+              `- Duration: ${process.env.DURATION_MINUTES || 30} minutes`,
+              "",
+              "The crashing input is attached to the run as the `fuzz-crash-input` artifact when produced.",
+              "",
+              "Reproduce locally with: `cargo fuzz run evaluate -- <path-to-crash-input>`",
+            ].join("\n");
+
+            const existing = await github.rest.search.issuesAndPullRequests({
+              q: `repo:${owner}/${repo} in:title "${title}" is:issue is:open`,
+            });
+            if (existing.data.total_count > 0) {
+              const issue = existing.data.items[0];
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issue.number,
+                body: `Failed again: ${runUrl}`,
+              });
+              console.log(`Commented on existing issue #${issue.number}`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner,
+                repo,
+                title,
+                body,
+              });
+              console.log(`Created issue #${created.data.number}`);
+            }
