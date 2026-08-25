@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a CI coverage job that measures line coverage with
+  `cargo-llvm-cov` and fails when it drops below 80%, uploading the report
+  to Codecov when a `CODECOV_TOKEN` secret is configured.
 - Added a coverage-guided `cargo-fuzz` (libFuzzer) fuzz target over the
   public `evaluate` entry point with a small committed seed corpus of
   arithmetic edge cases, plus a nightly GitHub Actions workflow that fuzzes

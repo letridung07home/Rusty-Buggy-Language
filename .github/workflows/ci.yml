@@ -47,6 +47,49 @@ jobs:
           RUSTDOCFLAGS: -D warnings
         run: cargo doc --no-deps --all-features
 
+  coverage:
+    name: Line coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install stable Rust with LLVM tools
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+          components: llvm-tools-preview
+
+      # Caches the installed cargo-llvm-cov binary (~/.cargo/bin). Workspace
+      # artifacts are excluded because cargo-llvm-cov rebuilds them with
+      # coverage instrumentation anyway.
+      - name: Cache Cargo artifacts
+        id: rust-cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      # Skip the compile when the binary was restored from cache.
+      - name: Install cargo-llvm-cov
+        if: steps.rust-cache.outputs.cache-hit != 'true'
+        run: cargo install cargo-llvm-cov --locked
+
+      # Prints the summary and fails the job when total line coverage drops
+      # below 80%, so blind spots are visible in CI. Tune the threshold to
+      # the measured baseline after the first run.
+      - name: Generate coverage report
+        run: cargo llvm-cov --all-features --lcov --output-path lcov.info --fail-under-lines 80
+
+      # Uploads only when a CODECOV_TOKEN secret is configured. v5 supports
+      # tokenless uploads for public repos; the gate can be dropped once the
+      # repository is set up on Codecov.
+      - name: Upload coverage to Codecov
+        if: ${{ secrets.CODECOV_TOKEN != '' }}
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
+        with:
+          files: lcov.info
+          fail_ci_if_error: false
+
   msrv:
     name: Rust 1.70 compatibility
     runs-on: ubuntu-latest

@@ -78,8 +78,10 @@ source selection and complete UTF-8 input read
   coverage), so it runs in a dedicated nightly workflow rather than the
   stable/MSRV suites.
 - `.github/workflows/ci.yml` checks formatting, compilation, tests, Clippy,
-  and Rust documentation on stable Rust, then checks compilation and tests
-  on the minimum supported Rust version.
+  and Rust documentation on stable Rust, measures line coverage with
+  `cargo-llvm-cov` (failing below 80%) and uploads it to Codecov when a
+  `CODECOV_TOKEN` secret is present, then checks compilation and tests on
+  the minimum supported Rust version.
   `.github/workflows/nightly-fuzz.yml` runs the coverage-guided `cargo-fuzz`
   target against `main` for 30 minutes every night, failing when the fuzzer
   finds a crash, panic, overflow, or hang; such failures file a GitHub issue
