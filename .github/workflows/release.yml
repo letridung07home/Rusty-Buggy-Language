@@ -19,8 +19,10 @@ on:
 env:
   TAG_NAME: ${{ github.event.inputs.tag_name || github.ref_name }}
 
+# Least privilege: only the job that publishes the release needs write
+# access to repository contents; test and build jobs only read.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   # The tag run must be self-validating: CI does trigger on the v* tag
@@ -131,6 +133,8 @@ jobs:
     name: Create GitHub release
     runs-on: ubuntu-latest
     needs: build
+    permissions:
+      contents: write
 
     steps:
       - name: Check out repository
