@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The line-coverage CI job no longer uploads reports to Codecov; it now
+  prints the coverage summary in the job log and enforces the 80% line
+  coverage threshold.
+
 ## [1.6.1] - 2026-08-26
 
 ### Added

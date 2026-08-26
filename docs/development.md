@@ -80,8 +80,8 @@ source selection and complete UTF-8 input read
 - `.github/workflows/ci.yml` checks formatting, compilation, tests, Clippy,
   and Rust documentation on stable Rust, lints the workflow files with
   actionlint, measures line coverage with `cargo-llvm-cov` (failing below
-  80%) and uploads it to Codecov when a `CODECOV_TOKEN` secret is present,
-  then checks compilation and tests on the minimum supported Rust version.
+  80%) and prints the coverage summary in the job log, then checks
+  compilation and tests on the minimum supported Rust version.
   Doctests run on both toolchains (`cargo test --doc`), and a `semver` job
   compares the public library API against the latest release tag with
   `cargo-semver-checks`, failing when a change would break the v1 series
