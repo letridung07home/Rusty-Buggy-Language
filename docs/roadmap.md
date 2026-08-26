@@ -13,7 +13,7 @@ lifetime of the 1.x series. Every 1.x change must remain backward compatible
 with the v1.0.0 contract; anything that would break it is deferred to v2.
 
 **Status:** All v1.x development goals are delivered. The series closes with
-v1.6.0; further language evolution is planned for v2.0.
+v1.6.0; further language evolution continues in the v2 series.
 
 ### Series commitments
 
@@ -116,9 +116,10 @@ and an agent-facing toolkit, while keeping it stable, predictable, and
 agent-friendly. The v2 series deliberately breaks the v1.0 contract; the
 headline change is a public `Value` type in place of the bare `i64` result.
 
-**Status:** Planned. No v2 development has started. The task list below is
-the v2 backlog; each release picks the tasks it will ship, and tasks are not
-bound to a specific version.
+**Status:** In progress. v2.0.0 is delivered and opens the series with the
+breaking typed-`Value` foundation; the remaining backlog below ships in
+later 2.x releases (v2.1+), each backward compatible with the v2.0.0
+contract.
 
 ### Series commitments
 
@@ -135,19 +136,27 @@ bound to a specific version.
   genuinely requires newer `std`; raising it is a deliberate, documented
   decision made at release time, not an incidental side effect.
 
-### Development goals
+### v2.0.0 milestone — delivered
 
-Concrete deliverables for the v2 series, grouped by theme and ordered by
-priority. Each one updates the language reference and changelog on
-completion. Developers choose which tasks ship in each release.
-
-**Richer values (breaking foundation)**
-
-- [ ] Introduce a public `Value` enum (`Int(i64)`, `Bool(bool)`,
+- [x] Introduce the public `Value` enum (`Int(i64)`, `Bool(bool)`,
   `String(String)`) and change `evaluate` and `evaluate_with_limits` to
   return `Result<Value, Error>`. `Error`, `SourcePosition`, and `Limits`
-  stay unchanged, and the CLI prints each value via its `Display` impl
-  (integers, `true`/`false`, and strings without surrounding quotes).
+  stay unchanged. v2.0 evaluation still produces only `Value::Int`; the
+  `Bool` and `String` variants are defined now so later 2.x releases stay
+  additive. The CLI prints each result through `Value`'s `Display` impl,
+  so v2.0 output is identical to v1.x for every program.
+- [x] Switch the CI semver job to `release-type: major` while the breaking
+  v2 window is open; the first v2 tag becomes the baseline at the v2.1
+  release.
+
+### v2.1+ backlog
+
+Concrete deliverables for the later v2 releases, grouped by theme and
+ordered by priority. Each one updates the language reference and changelog
+on completion. Developers choose which tasks ship in each release.
+
+**Richer values**
+
 - [ ] Add `true`/`false` literals and make comparisons produce a real
   boolean instead of integer `1`/`0`; add prefix `!` and short-circuiting
   `&&`/`||`. This changes existing programs such as
@@ -191,9 +200,8 @@ completion. Developers choose which tasks ship in each release.
 
 **Stability and distribution**
 
-- [ ] Switch the CI semver job from a v1 baseline to `release-type: major`
-  while the breaking v2 window is open, then to the first v2 tag as baseline
-  once it ships, so later 2.x releases stay backward compatible.
+- [ ] Set the CI semver job baseline to the first v2 tag once v2.0.0 ships,
+  so later 2.x releases stay backward compatible with the v2.0.0 contract.
 - [ ] Add runnable examples and tutorial sections for booleans, strings,
   control flow, and functions as each feature lands.
 

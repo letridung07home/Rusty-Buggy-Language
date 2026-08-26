@@ -156,6 +156,20 @@ mixed comparisons such as `1 < 2 < 3` and `1 < 2 == 1` are rejected. Use
 parentheses to make separate comparisons explicit, as in
 `(1 < 2) == (2 < 3)`.
 
+## Library API
+
+Programs can also be evaluated through the Rust library:
+
+```rust
+let result = rusty_buggy_language::evaluate("1 + 2")?;
+```
+
+`evaluate` (and `evaluate_with_limits`) return `Result<Value, Error>`, where
+`Value` is a typed result: `Int(i64)`, `Bool(bool)`, or `String(String)`.
+In v2.0 evaluation always produces `Value::Int`; the `Bool` and `String`
+variants are defined as part of the public v2 contract and become reachable
+in later 2.x releases. `Error` and `SourcePosition` are unchanged from v1.
+
 ## Errors
 
 On an invalid invocation or program, the CLI prints `error: <message>` to

@@ -29,7 +29,7 @@ The library and executable share a small, direct pipeline:
 library evaluate(program)
         |
         v
-lexer -> tokens -> parser -> program AST -> evaluator -> integer result
+lexer -> tokens -> parser -> program AST -> evaluator -> Value result
         ^
         |
 private CLI adapter <- process startup
@@ -39,11 +39,13 @@ source selection and complete UTF-8 input read
 ```
 
 - `src/lib.rs` owns the public library boundary and orchestration. Its primary
-  public function is `evaluate(program: &str) -> Result<i64, Error>`, with
+  public function is `evaluate(program: &str) -> Result<Value, Error>`, with
   `evaluate_with_limits(program, &Limits)` exposing the configurable input-size
-  bound. `evaluate` uses `Limits::default()`. Public types are `Error`, the
-  opaque error whose `Display` preserves the existing user-facing message, and
-  `SourcePosition`, exposed through `Error::position()`.
+  bound. `evaluate` uses `Limits::default()`. Public types are `Value`, the
+  typed evaluation result (`Int(i64)`, `Bool(bool)`, `String(String)`; v2.0
+  produces only `Int`), `Error`, the opaque error whose `Display` preserves the
+  existing user-facing message, and `SourcePosition`, exposed through
+  `Error::position()`.
 - `src/ast.rs`, `src/lexer.rs`, `src/parser.rs`, `src/evaluator.rs`, and
   `src/error.rs` are flat, private implementation modules. The lexer turns
   text into position-tagged tokens; the recursive-descent parser builds
@@ -85,9 +87,10 @@ source selection and complete UTF-8 input read
   Doctests run on both toolchains (`cargo test --doc`), a `release` job
   runs the full test suite in release mode (`cargo test --release`) so the
   shipped binaries are exercised without debug assertions, and a `semver`
-  job compares the public library API against the latest release tag with
-  `cargo-semver-checks`, failing when a change would break the v1 series
-  backward-compatibility commitment. Runs for the same branch or pull
+  job checks the public library API with `cargo-semver-checks`; it runs with
+  `release-type: major` while the breaking v2 window is open, and will switch
+  to the v2.0.0 tag as baseline at the v2.1 release so later 2.x releases stay
+  backward compatible with the v2 contract. Runs for the same branch or pull
   request cancel the previous in-flight run, so a newer push supersedes a
   stale one.
   `.github/workflows/nightly-fuzz.yml` runs the coverage-guided `cargo-fuzz`
@@ -138,7 +141,7 @@ Keep the language intentionally narrow unless a feature has a clear benefit
 for AI coding agents. Floating-point values, unary plus, and arbitrary-
 precision integers are not currently supported; adding any of them requires a
 deliberate specification update rather than a documentation-only change. File and standard-input handling belongs to the CLI adapter and must
-not change the public `evaluate(&str) -> Result<i64, Error>` API.
+not change the public `evaluate(&str) -> Result<Value, Error>` API.
 
 ## Compatibility and verification
 

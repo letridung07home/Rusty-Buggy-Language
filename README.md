@@ -13,6 +13,11 @@ comments and `/* */` block comments. Comparisons produce integer `1` for true
 and `0` for false, so their results can be stored in variables or used in
 later arithmetic.
 
+Programs can also be evaluated programmatically: the library's `evaluate`
+entry point returns a typed `Value` result (`Int`, `Bool`, or `String`). In
+v2.0 the evaluator produces only `Value::Int`; the `Bool` and `String`
+variants arrive in later 2.x releases.
+
 For the complete grammar, evaluation rules, operator precedence, CLI behavior,
 and error conditions, see the [language reference](docs/language.md). The
 [roadmap](docs/roadmap.md) defines upcoming release goals, while historical

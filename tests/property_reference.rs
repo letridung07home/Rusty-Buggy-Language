@@ -11,7 +11,7 @@
 
 use std::collections::HashMap;
 
-use rusty_buggy_language::evaluate;
+use rusty_buggy_language::{evaluate, Value};
 
 /// Max absolute value used for generated integer literals. Staying well below
 /// `i64::MAX` keeps rendering unambiguous: literals print with an explicit
@@ -261,7 +261,7 @@ fn render_program(program: &Program) -> String {
 /// Asserts that `evaluate(source)` and the reference agree.
 fn assert_agrees(source: &str, expected: Option<i64>) {
     match (evaluate(source), expected) {
-        (Ok(actual), Some(expect)) => assert_eq!(actual, expect, "source: {source}"),
+        (Ok(Value::Int(actual)), Some(expect)) => assert_eq!(actual, expect, "source: {source}"),
         (Err(_), None) => {}
         (Ok(actual), None) => {
             panic!("pipeline succeeded with {actual} but the reference failed: {source}")

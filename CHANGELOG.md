@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-08-26
+
+### Changed
+
+- Breaking: `evaluate` and `evaluate_with_limits` now return
+  `Result<Value, Error>` instead of `Result<i64, Error>`. The new public
+  `Value` enum (`Int(i64)`, `Bool(bool)`, `String(String)`) is the typed
+  evaluation result; v2.0 evaluation still produces only `Value::Int`, with
+  the `Bool` and `String` variants defined now so later 2.x releases stay
+  backward compatible with the v2.0.0 contract. `Error`,
+  `SourcePosition`, and `Limits` are unchanged.
+- The CLI prints each result through `Value`'s `Display` implementation, so
+  v2.0 output is byte-for-byte identical to v1.x for every program;
+  language semantics, error messages, and exit behavior are unchanged.
+- The CI semver job now runs with `release-type: major` while the breaking
+  v2 window is open, so the deliberate v1-to-v2 API change is reported
+  rather than failing the check; the first v2 tag becomes the baseline at
+  the v2.1 release.
+
 ## [1.6.3] - 2026-08-26
 
 ### Added

@@ -4,7 +4,7 @@ use std::io::{self, BufRead, BufReader, Read};
 use std::path::Path;
 use std::process::ExitCode;
 
-use rusty_buggy_language::{evaluate_with_limits, Error, Limits};
+use rusty_buggy_language::{evaluate_with_limits, Error, Limits, Value};
 
 const HELP: &str = "Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -f <path> | --file <path>\n       rusty-buggy-language --stdin\n       rusty-buggy-language --repl\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n       rusty-buggy-language [--positions] [--input-limit <bytes>] <program>\n       rusty-buggy-language [--positions] [--input-limit <bytes>] -f <path> | --file <path>\n       rusty-buggy-language [--positions] [--input-limit <bytes>] --stdin\n\nEvaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, %, // and /* */ comments, parentheses, and prefix -.\n\nThe program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input. Source modes are mutually exclusive. `--repl` reads one program per line from standard input and prints each result.\n\n--positions      Also report the line and column of evaluation or syntax errors.\n--input-limit N  Reject programs longer than N bytes before evaluation.";
 
@@ -83,7 +83,7 @@ where
 
 #[derive(Debug, PartialEq)]
 enum Output {
-    Value(i64),
+    Value(Value),
     Help,
     Version,
 }
@@ -279,6 +279,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::{execute, execute_with_reader, run_repl, Output};
+    use rusty_buggy_language::Value;
     use std::ffi::OsString;
     use std::io::BufReader;
 
@@ -417,7 +418,7 @@ mod tests {
 
         assert_eq!(
             execute_with_reader(arguments(&["--stdin"]), &mut input),
-            Ok(Output::Value(20))
+            Ok(Output::Value(Value::Int(20)))
         );
     }
 
@@ -438,7 +439,7 @@ mod tests {
     fn positions_flag_is_allowed_alongside_an_inline_program() {
         assert_eq!(
             execute(arguments(&["--positions", "1 + 2"])),
-            Ok(Output::Value(3))
+            Ok(Output::Value(Value::Int(3)))
         );
     }
 
@@ -446,7 +447,7 @@ mod tests {
     fn input_limit_flag_appends_its_value_to_an_inline_program() {
         assert_eq!(
             execute(arguments(&["--input-limit", "5", "1 + 2"])),
-            Ok(Output::Value(3))
+            Ok(Output::Value(Value::Int(3)))
         );
     }
 
