@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-08-26
+
+### Changed
+
+- The nightly fuzz workflow now runs its coverage-guided fuzzing in
+  parallel across every core on the runner, so the same wall-clock budget
+  buys roughly twice the executions and deeper coverage. It passes
+  `-jobs`/`-workers` set to the runner's core count (instead of letting
+  libFuzzer default to half the cores), with each worker sharing the corpus
+  while receiving the full time budget.
+
 ## [2.0.0] - 2026-08-26
 
 ### Changed

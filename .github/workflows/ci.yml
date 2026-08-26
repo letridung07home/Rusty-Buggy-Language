@@ -131,7 +131,7 @@ jobs:
       - name: Check API compatibility
         uses: obi1kenobi/cargo-semver-checks-action@6b69fcf40e9b5fb17adeb57e4b6ecd020649a239 # v2.9
         with:
-          baseline-rev: v1.6.3
+          baseline-rev: v2.0.0
           release-type: major
 
   msrv:
