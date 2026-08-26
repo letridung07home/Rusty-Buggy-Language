@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The CI workflow can now be triggered manually with `workflow_dispatch`,
+  so the full suite can be re-run on demand from the Actions tab.
+
 ### Changed
 
 - The line-coverage CI job no longer uploads reports to Codecov; it now
