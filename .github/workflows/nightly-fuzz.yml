@@ -71,7 +71,15 @@ jobs:
           # above 180 would run until the 240-minute job timeout kills it.
           duration=$(( DURATION_MINUTES < 1 ? 1 : DURATION_MINUTES ))
           duration=$(( duration > 180 ? 180 : duration ))
-          cargo fuzz run evaluate -- -max_total_time=$(( duration * 60 )) -timeout=10 -print_final_stats=1
+
+          # Fuzz across every core on the runner: -jobs/-workers run one
+          # libFuzzer process per core, each sharing the corpus (via
+          # -reload) and getting the full -max_total_time budget in
+          # parallel, so the same wall-clock window buys N times the
+          # fuzzing. -workers is passed explicitly because libFuzzer would
+          # otherwise default to only half the cores.
+          cores=$(nproc)
+          cargo fuzz run evaluate -- -jobs=$cores -workers=$cores -max_total_time=$(( duration * 60 )) -timeout=10 -print_final_stats=1
         shell: bash
 
       # libFuzzer writes the crashing input to fuzz/artifacts/<target>/ when
