@@ -30,7 +30,8 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
 ```
 
 The GitHub Actions workflow runs these stable-toolchain quality checks on
-pushes to `main` and on pull requests. It also compiles and tests the package
+pushes to `main`, on pull requests, and on demand from the Actions tab
+(`workflow_dispatch`). It also compiles and tests the package
 with Rust 1.70, the project's minimum supported Rust version (MSRV), so new
 changes must remain compatible with both stable Rust and the MSRV. A separate
 semver job compares the public library API against the latest release tag

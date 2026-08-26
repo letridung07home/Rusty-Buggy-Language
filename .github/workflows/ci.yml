@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Lets the full suite be triggered on demand from the Actions tab or
+  # with `gh workflow run CI`, e.g. to re-check a branch.
+  workflow_dispatch:
 
 permissions:
   contents: read

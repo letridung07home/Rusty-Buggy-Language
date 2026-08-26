@@ -137,8 +137,9 @@ must remain compatible with both the current stable toolchain and the minimum
 supported Rust version (MSRV).
 
 GitHub Actions is the source of truth for validation. It runs the checks listed
-in [CONTRIBUTING.md](../CONTRIBUTING.md) on pushes and pull requests, including
-the stable quality suite and the Rust 1.70 compatibility suite. In the
+in [CONTRIBUTING.md](../CONTRIBUTING.md) on pushes, pull requests, and manual
+`workflow_dispatch` runs, including the stable quality suite and the Rust 1.70
+compatibility suite. In the
 maintainer development environment, do not run Rust builds or tests locally;
 push the branch and inspect the CI run instead:
 
