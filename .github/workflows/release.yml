@@ -165,7 +165,10 @@ jobs:
           # per-artifact subdirectories into one directory for release.
           find dist -type f -name 'rusty-buggy-language*' -exec cp -f {} assets/ \;
           cd assets
-          sha256sum * > SHA256SUMS
+          # `--` keeps filenames beginning with a dash from being read as
+          # options (shellcheck SC2035); the SHA256SUMS file itself is
+          # created by the redirect after the glob is expanded.
+          sha256sum -- * > SHA256SUMS
           echo "Checksums written:"
           cat SHA256SUMS
 
