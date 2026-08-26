@@ -82,8 +82,10 @@ source selection and complete UTF-8 input read
   actionlint, measures line coverage with `cargo-llvm-cov` (failing below
   80%) and prints the coverage summary in the job log, then checks
   compilation and tests on the minimum supported Rust version.
-  Doctests run on both toolchains (`cargo test --doc`), and a `semver` job
-  compares the public library API against the latest release tag with
+  Doctests run on both toolchains (`cargo test --doc`), a `release` job
+  runs the full test suite in release mode (`cargo test --release`) so the
+  shipped binaries are exercised without debug assertions, and a `semver`
+  job compares the public library API against the latest release tag with
   `cargo-semver-checks`, failing when a change would break the v1 series
   backward-compatibility commitment.
   `.github/workflows/nightly-fuzz.yml` runs the coverage-guided `cargo-fuzz`
