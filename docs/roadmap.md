@@ -12,6 +12,9 @@ integer expression language with a supported Rust library API and CLI for the
 lifetime of the 1.x series. Every 1.x change must remain backward compatible
 with the v1.0.0 contract; anything that would break it is deferred to v2.
 
+**Status:** All v1.x development goals are delivered. The series closes with
+v1.6.0; further language evolution is planned for v2.0.
+
 ### Series commitments
 
 - No breaking changes to language semantics, the public
@@ -53,13 +56,14 @@ updates the language reference and changelog on completion.
 - [x] Add an interactive REPL mode (`rusty-buggy-language --repl`) that reads
   programs line by line and prints each result, reusing the exact CLI
   evaluator.
-- [ ] Publish the crate to crates.io and keep package versions in sync with
-  every 1.x release. Requires an automated publish step executed in GitHub
-  Actions.
 - [x] Attach prebuilt Linux, macOS, and Windows binaries to each GitHub
   release so agents can install without a Rust toolchain.
 - [x] Add a tutorial (`docs/tutorial.md`) and an `examples/` directory of
   runnable programs.
+
+Publishing the crate to crates.io was originally a development goal but was
+deliberately dropped before the series closed; distribution stays with the
+prebuilt GitHub-release binaries.
 
 ### v1.0.0 milestone — delivered
 
@@ -106,5 +110,16 @@ contract is deferred to v2.
 
 ## v2.0 — Next milestone
 
-Goals for v2.0 are not yet defined. Planning begins once the v1.x goals above
-are settled.
+The v1.x series is closed, so v2.0 is the next milestone. Goals are not
+scheduled yet; the candidates below are carried over from the v1.x non-goals,
+ordered by expected value for AI coding agents:
+
+- **Strings** — double-quoted literals, concatenation, equality, and length,
+  integrated with the REPL and all source modes.
+- **Booleans** — a real boolean type instead of `1`/`0` comparisons.
+- **Control flow** — `if`/`else` expressions and loops.
+- **Functions** — named, callable subprograms with arguments.
+- **A small standard library** of agent-relevant operations.
+
+V2 work may break the v1.0 contract. Each milestone updates the language
+reference, changelog, and tests together with the implementation.

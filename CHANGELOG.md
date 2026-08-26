@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- Dropped the roadmap goal to publish the crate to crates.io; distribution
+  stays with the prebuilt GitHub-release binaries.
+
+### Changed
+
+- Closed out the v1.x roadmap: all development goals are delivered as of
+  v1.6.0, and the roadmap now records candidate v2.0 directions.
+
 ## [1.5.1] - 2026-08-26
 
 ### Added
