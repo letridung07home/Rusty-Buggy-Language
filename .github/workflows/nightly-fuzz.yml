@@ -79,7 +79,7 @@ jobs:
           # fuzzing. -workers is passed explicitly because libFuzzer would
           # otherwise default to only half the cores.
           cores=$(nproc)
-          cargo fuzz run evaluate -- -jobs=$cores -workers=$cores -max_total_time=$(( duration * 60 )) -timeout=10 -print_final_stats=1
+          cargo fuzz run evaluate -- -jobs="$cores" -workers="$cores" -max_total_time=$(( duration * 60 )) -timeout=10 -print_final_stats=1
         shell: bash
 
       # libFuzzer writes the crashing input to fuzz/artifacts/<target>/ when
