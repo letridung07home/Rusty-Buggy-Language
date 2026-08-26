@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added `#![forbid(unsafe_code)]` and `#![warn(missing_docs)]` crate-root
+  lints to the library, so the crate remains free of `unsafe` and every
+  public item stays documented (enforced by the documentation job).
+- Added doctests for the `evaluate` and `evaluate_with_limits` entry points,
+  run by CI with `cargo test --doc` on both stable Rust and Rust 1.70.
+- Added a CI job that checks the public library API for backward
+  compatibility against the latest release tag with `cargo-semver-checks`,
+  machine-enforcing the v1 series no-breaking-changes commitment.
+
+### Changed
+
+- CI now runs doctests alongside the ordinary test suite.
+
 ## [1.6.0] - 2026-08-26
 
 ### Removed

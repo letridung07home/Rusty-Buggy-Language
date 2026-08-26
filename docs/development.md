@@ -82,6 +82,10 @@ source selection and complete UTF-8 input read
   actionlint, measures line coverage with `cargo-llvm-cov` (failing below
   80%) and uploads it to Codecov when a `CODECOV_TOKEN` secret is present,
   then checks compilation and tests on the minimum supported Rust version.
+  Doctests run on both toolchains (`cargo test --doc`), and a `semver` job
+  compares the public library API against the latest release tag with
+  `cargo-semver-checks`, failing when a change would break the v1 series
+  backward-compatibility commitment.
   `.github/workflows/nightly-fuzz.yml` runs the coverage-guided `cargo-fuzz`
   target against `main` for 30 minutes every night, failing when the fuzzer
   finds a crash, panic, overflow, or hang; such failures file a GitHub issue

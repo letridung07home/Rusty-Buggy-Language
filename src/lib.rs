@@ -1,3 +1,12 @@
+//! Rusty Buggy Language is a small, stable, agent-friendly integer
+//! expression language. The library exposes the [`evaluate`] entry point
+//! that lexes, parses, and evaluates a complete program under checked
+//! signed 64-bit arithmetic, together with the configurable [`Limits`] and
+//! the [`Error`] and [`SourcePosition`] types describing failures.
+
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
+
 mod ast;
 mod error;
 mod evaluator;
@@ -30,11 +39,27 @@ impl Default for Limits {
 }
 
 /// Evaluates a Rusty Buggy Language program with the default [`Limits`].
+///
+/// ```
+/// # use rusty_buggy_language::evaluate;
+/// assert_eq!(evaluate("let rate = 20; let quantity = 5; rate * quantity")?, 100);
+/// assert_eq!(evaluate("8 / (3 - 3)").unwrap_err().to_string(), "division by zero");
+/// # Ok::<(), rusty_buggy_language::Error>(())
+/// ```
 pub fn evaluate(program: &str) -> Result<i64, Error> {
     evaluate_with_limits(program, &Limits::default())
 }
 
 /// Evaluates a Rusty Buggy Language program under the given resource [`Limits`].
+///
+/// ```
+/// # use rusty_buggy_language::{evaluate_with_limits, Limits};
+/// let limits = Limits { max_input_bytes: 5 };
+/// assert_eq!(
+///     evaluate_with_limits("1 + 2 + 3", &limits).unwrap_err().to_string(),
+///     "program is too large to evaluate"
+/// );
+/// ```
 pub fn evaluate_with_limits(program: &str, limits: &Limits) -> Result<i64, Error> {
     if program.len() > limits.max_input_bytes {
         return Err(Error::new("program is too large to evaluate"));
