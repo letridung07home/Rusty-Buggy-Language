@@ -110,11 +110,12 @@ jobs:
       - name: Run actionlint
         uses: devops-actions/actionlint@ec02b36684b2f574f1d219ad0a43b082e46bf3e4 # v0.1.13
 
-  # Machine-checks the v1 series commitment that the public library API
-  # stays backward compatible: the job fails when a change breaks the API
-  # compared with the latest release tag. Bump baseline-rev to the newest
-  # release tag when cutting a release; when v2.0 work starts (deliberately
-  # breaking), set release-type: major instead of bumping the baseline.
+  # Machine-checks the public library API against the latest release tag with
+  # cargo-semver-checks. While the breaking v2 window is open this runs with
+  # release-type: major, which allows the deliberate v2 API break; once v2.0.0
+  # ships, switch back to a plain baseline check against the first v2 tag so
+  # later 2.x releases stay backward compatible. Bump baseline-rev to the
+  # newest release tag when cutting a release.
   semver:
     name: Check public API compatibility
     runs-on: ubuntu-latest
@@ -130,7 +131,8 @@ jobs:
       - name: Check API compatibility against the latest release
         uses: obi1kenobi/cargo-semver-checks-action@6b69fcf40e9b5fb17adeb57e4b6ecd020649a239 # v2.9
         with:
-          baseline-rev: v1.6.2
+          baseline-rev: v1.6.3
+          release-type: major
 
   msrv:
     name: Rust 1.70 compatibility
