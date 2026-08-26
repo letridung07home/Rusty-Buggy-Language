@@ -9,6 +9,8 @@ pub struct SourcePosition {
     pub column: usize,
 }
 
+/// An evaluation or syntax error, carrying a stable user-facing message and
+/// an optional source [`position`](Error::position).
 #[derive(Debug, PartialEq, Eq)]
 pub struct Error {
     message: String,
