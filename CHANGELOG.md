@@ -5,7 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.6.3] - 2026-08-26
+
+### Added
+
+- The release workflow can now be triggered manually with
+  `workflow_dispatch` by supplying an existing tag name, so a release
+  whose asset upload failed can be re-created without retagging; the run
+  builds and publishes exactly the requested tag.
+
+### Changed
+
+- CI runs for the same branch or pull request now cancel the previous
+  in-flight run, so a newer push supersedes a stale one instead of
+  consuming runner time.
+- The release workflow now runs the release-mode test suite on the tag
+  before building, so the tag is self-validating instead of racing the
+  parallel CI run triggered by the tag push.
+
+### Fixed
+
+- The nightly fuzz workflow now clamps the manual `duration_minutes` input
+  to a minimum of 1 minute in addition to the existing 180-minute maximum,
+  so a `0` or negative value no longer means an unbounded
+  `-max_total_time=0` fuzz run; the issue-filing body reports the same
+  clamped duration.
 
 ## [1.6.2] - 2026-08-26
 

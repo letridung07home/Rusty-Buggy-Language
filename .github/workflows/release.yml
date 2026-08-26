@@ -4,14 +4,56 @@ on:
   push:
     tags:
       - "v*"
+  # Lets a release be re-created on demand from the Actions tab, e.g. when
+  # an asset upload failed after the tag was pushed, without retagging.
+  # Supply the existing tag; the run builds and publishes exactly that tag.
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: SemVer tag to build and release (e.g. v1.7.0)
+        required: true
+        type: string
+
+# The tag comes from the dispatch input on manual runs and from the pushed
+# ref on tag events; every job checks out and publishes this exact tag.
+env:
+  TAG_NAME: ${{ github.event.inputs.tag_name || github.ref_name }}
 
 permissions:
   contents: write
 
 jobs:
+  # The tag run must be self-validating: CI does trigger on the v* tag
+  # push, but its jobs run in parallel with this workflow and could fail
+  # after the release is already published. Gate the build matrix on the
+  # release-mode suite so a tag only ships when its tests pass here.
+  test:
+    name: Release-mode tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TAG_NAME }}
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+
+      - name: Cache Cargo build artifacts
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          cache-workspace-crates: "true"
+
+      - name: Run tests in release mode
+        run: cargo test --release --all-targets --all-features
+
   build:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    needs: test
     strategy:
       fail-fast: false
       matrix:
@@ -46,6 +88,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TAG_NAME }}
 
       - name: Install stable Rust with target
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
@@ -93,11 +137,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          ref: ${{ env.TAG_NAME }}
 
       - name: Validate release tag and package version
         shell: bash
-        env:
-          TAG_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
 
@@ -130,7 +173,6 @@ jobs:
       - name: Extract changelog entry
         shell: bash
         env:
-          TAG_NAME: ${{ github.ref_name }}
           REPOSITORY: ${{ github.repository }}
           SERVER_URL: ${{ github.server_url }}
         run: |
@@ -194,8 +236,8 @@ jobs:
       - name: Publish GitHub release with binaries
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: RBL ${{ github.ref_name }}
+          tag_name: ${{ env.TAG_NAME }}
+          name: RBL ${{ env.TAG_NAME }}
           body_path: RELEASE_NOTES.md
           files: |
             assets/*

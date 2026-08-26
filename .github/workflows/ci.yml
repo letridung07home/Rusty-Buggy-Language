@@ -10,6 +10,13 @@ on:
   # with `gh workflow run CI`, e.g. to re-check a branch.
   workflow_dispatch:
 
+# Pushes to the same branch or PR supersede each other: a newer run
+# cancels the stale in-flight one instead of both consuming runners.
+# Tag refs are unique, so tag-triggered runs are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -123,7 +130,7 @@ jobs:
       - name: Check API compatibility against the latest release
         uses: obi1kenobi/cargo-semver-checks-action@6b69fcf40e9b5fb17adeb57e4b6ecd020649a239 # v2.9
         with:
-          baseline-rev: v1.6.1
+          baseline-rev: v1.6.2
 
   msrv:
     name: Rust 1.70 compatibility

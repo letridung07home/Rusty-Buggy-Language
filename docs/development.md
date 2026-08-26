@@ -87,13 +87,15 @@ source selection and complete UTF-8 input read
   shipped binaries are exercised without debug assertions, and a `semver`
   job compares the public library API against the latest release tag with
   `cargo-semver-checks`, failing when a change would break the v1 series
-  backward-compatibility commitment.
+  backward-compatibility commitment. Runs for the same branch or pull
+  request cancel the previous in-flight run, so a newer push supersedes a
+  stale one.
   `.github/workflows/nightly-fuzz.yml` runs the coverage-guided `cargo-fuzz`
   target against `main` for 30 minutes every night, failing when the fuzzer
   finds a crash, panic, overflow, or hang; such failures file a GitHub issue
   automatically with the crashing input attached. It can also be dispatched
-  manually with a configurable duration in minutes (default 1) for a quick
-  check.
+  manually with a configurable duration in minutes (default 1, clamped to
+  the 1-180 minute window) for a quick check.
   `.github/workflows/release.yml` creates releases from validated version tags,
   extracts their descriptions from `CHANGELOG.md`, and attaches prebuilt
   Linux, macOS, and Windows binaries built from the tag. Each binary is
@@ -101,7 +103,11 @@ source selection and complete UTF-8 input read
   (`rusty-buggy-language-<platform>`, with the arch appended when a platform
   ships more than one, e.g. `rusty-buggy-language-linux-arm64`) so the
   artifacts never collide, and a `SHA256SUMS` file of their checksums is
-  attached so users can verify downloaded builds. All three
+  attached so users can verify downloaded builds. The tag's release-mode
+  test suite must pass before the build matrix runs, so a tag is
+  self-validating, and the workflow can be re-triggered manually with
+  `workflow_dispatch` by supplying an existing tag name to re-create a
+  release without retagging. All three
   workflows cache Cargo build artifacts with `Swatinem/rust-cache`; the fuzz
   job pins a specific nightly date so its cache key stays stable across days.
 

@@ -66,9 +66,11 @@ jobs:
         id: fuzz
         run: |
           # Enforce the documented 1-180 minute window even for manual
-          # workflow_dispatch values; anything larger would otherwise run
-          # until the 240-minute job timeout kills it.
-          duration=$(( DURATION_MINUTES > 180 ? 180 : DURATION_MINUTES ))
+          # workflow_dispatch values. A value of 0 or less would otherwise
+          # mean -max_total_time=0 (unbounded in libFuzzer), and anything
+          # above 180 would run until the 240-minute job timeout kills it.
+          duration=$(( DURATION_MINUTES < 1 ? 1 : DURATION_MINUTES ))
+          duration=$(( duration > 180 ? 180 : duration ))
           cargo fuzz run evaluate -- -max_total_time=$(( duration * 60 )) -timeout=10 -print_final_stats=1
         shell: bash
 
@@ -94,12 +96,15 @@ jobs:
             const repo = context.repo.repo;
             const title = "Nightly fuzz found a crash, panic, or hang";
             const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            // Clamp to the same 1-180 minute window the fuzz step enforces;
+            // 0, negative, or unparseable values report the 1-minute minimum.
+            const duration = Math.min(Math.max(Number(process.env.DURATION_MINUTES) || 1, 1), 180);
             const body = [
               `The nightly coverage-guided fuzz run failed on \`main\` at commit \`${context.sha.slice(0, 7)}\`.`,
               "",
               `- Workflow run: ${runUrl}`,
               "- Fuzz target: `evaluate`",
-              `- Duration: ${Math.min(Number(process.env.DURATION_MINUTES) || 30, 180)} minutes`,
+              `- Duration: ${duration} minutes`,
               "",
               "The crashing input is attached to the run as the `fuzz-crash-input` artifact when produced.",
               "",
