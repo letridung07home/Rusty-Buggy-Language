@@ -18,15 +18,29 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            platform: linux
+            name: rusty-buggy-language-linux
+            suffix: ""
+          # Native arm64 runner, so no cross-compilation is needed; the
+          # name carries the arch to stay distinct from the x86_64 build.
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            name: rusty-buggy-language-linux-arm64
             suffix: ""
           - os: macos-latest
             target: aarch64-apple-darwin
-            platform: macos
+            name: rusty-buggy-language-macos
+            suffix: ""
+          # Intel macOS is cross-compiled on the arm64 runner: GitHub
+          # retired its last x86_64 images (macos-13) in December 2025,
+          # and this dependency-free crate links fine with clang's
+          # universal SDK on the arm64 host.
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            name: rusty-buggy-language-macos-x86_64
             suffix: ""
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            platform: windows
+            name: rusty-buggy-language-windows
             suffix: ".exe"
 
     steps:
@@ -49,24 +63,24 @@ jobs:
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
 
-      # Give each binary a platform-suffixed name so the linux and macOS
-      # builds don't share the file name `rusty-buggy-language`; the checksum
-      # file and the published release assets then stay unambiguous. The
-      # platform-named file is staged in the workspace root for upload while
-      # the artifact keeps a descriptive name.
+      # Give each binary a unique platform-suffixed name so builds that
+      # share the underlying file name `rusty-buggy-language` never
+      # clobber each other; the arch is part of the name where a platform
+      # ships more than one binary. The checksum file and the published
+      # release assets then stay unambiguous.
       - name: Stage platform-named binary
         shell: bash
         run: |
           set -euo pipefail
           bin="target/${{ matrix.target }}/release/rusty-buggy-language${{ matrix.suffix }}"
-          name="rusty-buggy-language-${{ matrix.platform }}${{ matrix.suffix }}"
+          name="${{ matrix.name }}${{ matrix.suffix }}"
           cp -- "$bin" "$name"
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: rusty-buggy-language-${{ matrix.platform }}
-          path: rusty-buggy-language-${{ matrix.platform }}${{ matrix.suffix }}
+          name: ${{ matrix.name }}
+          path: ${{ matrix.name }}${{ matrix.suffix }}
           if-no-files-found: error
 
   release:
@@ -124,7 +138,12 @@ jobs:
 
           version="${TAG_NAME#v}"
           awk -v version="$version" '
-            index($0, "## [" version "]") == 1 { found=1; next }
+            BEGIN {
+              # Require the line to start with the exact "## [X.Y.Z]" header
+              # so extracting 1.6.1 can never match a 1.6.10 section above it.
+              needle = "## [" version "]"
+            }
+            substr($0, 1, length(needle)) == needle { found=1; next }
             found && /^## / { exit }
             found { print }
           ' CHANGELOG.md | sed '/./,$!d' > RELEASE_NOTES.md

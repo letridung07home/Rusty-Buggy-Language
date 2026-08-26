@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-08-26
+
 ### Added
 
 - The CI workflow can now be triggered manually with `workflow_dispatch`,
@@ -19,6 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The line-coverage CI job no longer uploads reports to Codecov; it now
   prints the coverage summary in the job log and enforces the 80% line
   coverage threshold.
+- GitHub releases now also ship arm64 Linux (`ubuntu-24.04-arm` native
+  build) and x86_64 macOS (cross-compiled on the arm64 runner) binaries,
+  alongside the existing x86_64 Linux, arm64 macOS, and x86_64 Windows
+  builds.
+
+### Fixed
+
+- The nightly fuzz workflow now clamps the manual `duration_minutes`
+  input to the documented 180-minute maximum, so an out-of-range value
+  no longer runs until the job timeout kills it.
+- The release workflow's changelog extraction now anchors on the exact
+  `## [X.Y.Z]` header, so a version like 1.6.1 can no longer match a
+  1.6.10 section.
 
 ## [1.6.1] - 2026-08-26
 

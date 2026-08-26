@@ -64,7 +64,12 @@ jobs:
       # window.
       - name: Fuzz the evaluate entry point
         id: fuzz
-        run: cargo fuzz run evaluate -- -max_total_time=$(( DURATION_MINUTES * 60 )) -timeout=10 -print_final_stats=1
+        run: |
+          # Enforce the documented 1-180 minute window even for manual
+          # workflow_dispatch values; anything larger would otherwise run
+          # until the 240-minute job timeout kills it.
+          duration=$(( DURATION_MINUTES > 180 ? 180 : DURATION_MINUTES ))
+          cargo fuzz run evaluate -- -max_total_time=$(( duration * 60 )) -timeout=10 -print_final_stats=1
         shell: bash
 
       # libFuzzer writes the crashing input to fuzz/artifacts/<target>/ when
@@ -94,7 +99,7 @@ jobs:
               "",
               `- Workflow run: ${runUrl}`,
               "- Fuzz target: `evaluate`",
-              `- Duration: ${process.env.DURATION_MINUTES || 30} minutes`,
+              `- Duration: ${Math.min(Number(process.env.DURATION_MINUTES) || 30, 180)} minutes`,
               "",
               "The crashing input is attached to the run as the `fuzz-crash-input` artifact when produced.",
               "",

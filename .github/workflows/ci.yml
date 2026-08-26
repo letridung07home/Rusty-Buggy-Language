@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+    tags:
+      - "v*"
   pull_request:
   # Lets the full suite be triggered on demand from the Actions tab or
   # with `gh workflow run CI`, e.g. to re-check a branch.
@@ -121,7 +123,7 @@ jobs:
       - name: Check API compatibility against the latest release
         uses: obi1kenobi/cargo-semver-checks-action@6b69fcf40e9b5fb17adeb57e4b6ecd020649a239 # v2.9
         with:
-          baseline-rev: v1.6.0
+          baseline-rev: v1.6.1
 
   msrv:
     name: Rust 1.70 compatibility
