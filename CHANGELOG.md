@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- CI now runs the full test suite in release mode, exercising the same
+  build profile as the binaries shipped with each GitHub release.
 - The line-coverage CI job no longer uploads reports to Codecov; it now
   prints the coverage summary in the job log and enforces the 80% line
   coverage threshold.
