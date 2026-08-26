@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added a public `Value` type (`Int`, `Bool`, and `String` variants) and
+  changed `evaluate` and `evaluate_with_limits` to return
+  `Result<Value, Error>`. `Error`, `SourcePosition`, and `Limits` stay
+  unchanged; the CLI prints integers, `true`/`false`, and strings (without
+  surrounding quotes) through each value's `Display` impl.
+- Added `true`/`false` boolean literals, prefix `!`, and short-circuiting
+  `&&` and `||` operators.
+- Added `"..."` string literals with `\n`, `\t`, `\\`, and `\"` escapes;
+  `+` concatenates strings and `==`/`!=` compare values of the same type.
+- Added `if`/`else` expressions with expression blocks
+  (`{ let ...; expression }`) and lexical scoping, with shadowing allowed
+  across scopes; `else` is required and both branches must have the same type.
+- Added a static type checker that rejects ill-typed programs with a
+  positioned type error before evaluation.
+
+### Changed
+
+- Comparisons now produce real booleans (`true`/`false`) instead of integer
+  `1`/`0`, so a comparison result can no longer feed arithmetic directly:
+  `let ready = 3 >= 2; ready * 10` is now a type error (write
+  `if ready { 10 } else { 0 }` instead).
+- This is the first v2 development milestone and deliberately breaks the v1
+  contract (`evaluate` now returns `Value`); the CI semver job now runs with
+  `release-type: major` while the breaking v2 window is open.
+
 ## [1.6.3] - 2026-08-26
 
 ### Added

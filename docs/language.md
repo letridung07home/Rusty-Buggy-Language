@@ -1,8 +1,9 @@
 # Language reference
 
-Rusty Buggy Language is currently a small expression language evaluated by the
+Rusty Buggy Language is a small expression language evaluated by the
 `rusty-buggy-language` command-line program. A program consists of zero or more
 immutable variable declarations followed by exactly one final expression.
+Values are signed 64-bit integers, booleans, and UTF-8 strings.
 
 ## Running a program
 
@@ -45,7 +46,7 @@ Two optional configuration flags may appear alongside an inline program, a
 
 | Flag | Behavior |
 | --- | --- |
-| `--positions` | Also report the line and column of an evaluation or syntax error. When set, the CLI prints `error: <message>` to standard error followed by ` at line L, column C`. Without it, error output is exactly the plain `error: <message>` line. |
+| `--positions` | Also report the line and column of an evaluation, type, or syntax error. When set, the CLI prints `error: <message>` to standard error followed by ` at line L, column C`. Without it, error output is exactly the plain `error: <message>` line. |
 | `--input-limit <bytes>` | Reject a source program longer than `<bytes>` bytes before it is parsed or evaluated. The value must be a non-negative integer. |
 
 ## Resource limits
@@ -53,9 +54,10 @@ Two optional configuration flags may appear alongside an inline program, a
 The evaluator applies two built-in limits so that adversarial or oversized
 input reports a clear error instead of exhausting memory or the call stack.
 
-- **Nesting depth.** Parenthesized expressions and chains of prefix `-` may not
-  nest deeper than 256 levels. Exceeding the limit reports `program too deeply
-  nested`. Ordinary programs (even with heavy parentheses) are well below this.
+- **Nesting depth.** Parenthesized expressions, chains of prefix `-`/`!`, and
+  nested `if`/`else` blocks may not nest deeper than 256 levels. Exceeding the
+  limit reports `program too deeply nested`. Ordinary programs (even with heavy
+  parentheses) are well below this.
 - **Input size.** A program is rejected with `program is too large to
   evaluate` when it is longer than the configured input limit. The default is
   `1 MiB`; the CLI `--input-limit <bytes>` flag overrides it for one
@@ -74,27 +76,112 @@ formats.
 ```text
 program        ::= declaration* expression
 declaration    ::= "let" identifier "=" expression ";"
-expression     ::= comparison
+block          ::= "{" declaration* expression "}"
+expression     ::= logical_or
+logical_or     ::= logical_and ("||" logical_and)*
+logical_and    ::= comparison ("&&" comparison)*
 comparison     ::= additive (comparison_operator additive)?
 comparison_operator ::= "<" | "<=" | ">" | ">=" | "==" | "!="
 additive       ::= multiplicative (("+" | "-") multiplicative)*
 multiplicative ::= unary (("*" | "/" | "%") unary)*
-unary          ::= "-" unary | primary
-primary        ::= integer | identifier | "(" expression ")"
-
+unary          ::= ("-" | "!") unary | primary
+primary        ::= integer | string | "true" | "false" | identifier
+                 | "(" expression ")" | if_expression
+if_expression  ::= "if" expression block "else" block
 integer        ::= digit+
+string         ::= '"' (escape | character)* '"'
+escape         ::= "\\n" | "\\t" | "\\\\" | "\\\""
 identifier     ::= (ascii_letter | "_")
                    (ascii_letter | ascii_digit | "_")*
 ```
 
 Integer literals contain ASCII decimal digits only; digit separators and other
-numeric bases are not supported. Identifiers use ASCII letters, digits, and
-underscores, but cannot start with a digit. The exact identifier `let` is a
-reserved keyword, so it cannot be used as a variable name.
+numeric bases are not supported. String literals are enclosed in double
+quotes; the escapes `\n`, `\t`, `\\`, and `\"` are decoded by the lexer, any
+other escape sequence is an error, and a literal containing a raw newline or
+running past the end of the input is unterminated. Identifiers use ASCII
+letters, digits, and underscores, but cannot start with a digit. The exact
+identifiers `let`, `true`, `false`, `if`, and `else` are reserved keywords and
+cannot be used as variable names.
+
+## Values
+
+A program evaluates to exactly one value of one of three types.
+
+### Integers
+
+All integer values are signed 64-bit integers in the range
+`-9223372036854775808` to `9223372036854775807`. Arithmetic is checked.
+Addition, subtraction, multiplication, and unary negation report an error when
+their result is outside that range. Division truncates toward zero; division
+by zero and dividing `-9223372036854775808` by `-1` are errors. The `%`
+operator returns the remainder of truncated division, so its sign follows the
+dividend; it has the same checked semantics as `/`, and modulo by zero or
+`-9223372036854775808 % -1` are errors.
+
+The `-` in a negative literal is parsed as prefix unary negation. The special
+literal `-9223372036854775808` is accepted, while its unnegated magnitude is
+not a valid value. Other out-of-range literal magnitudes are rejected. Unary
+`+` is not supported.
+
+### Booleans
+
+The literals `true` and `false` produce booleans. Each comparison evaluates to
+the boolean `true` when it holds and `false` otherwise:
+
+```text
+let ready = 3 >= 2;
+if ready { 10 } else { 0 }
+```
+
+This program evaluates to `10`. Because comparisons return real booleans, a
+comparison result cannot be used directly in arithmetic: `let ready = 3 >= 2;
+ready * 10` is a type error. Use an `if` expression to branch on it instead.
+
+The prefix `!` negates a boolean, and `&&` and `||` combine booleans with
+short-circuit evaluation: the right operand of `&&` is not evaluated when the
+left operand is `false`, and the right operand of `||` is not evaluated when
+the left operand is `true`.
+
+The standalone `!` and `=` tokens are not comparison operators. Use `!=` for
+inequality, `==` for equality, and a single `=` only in a `let` declaration.
+
+### Strings
+
+String literals produce UTF-8 strings. The `+` operator concatenates two
+strings, and `==`/`!=` compare strings:
+
+```text
+let greeting = "hello" + " " + "world";  // "hello world"
+let same = greeting == "hello world";    // true
+```
+
+String ordering comparisons (`<`, `<=`, `>`, `>=`) are not yet supported;
+they are planned for a later v2 release.
+
+## if/else expressions
+
+An `if` expression chooses between two blocks based on a boolean condition:
+
+```text
+let temperature = 32;
+let verdict = if temperature > 30 { "hot" } else { "cold" };
+```
+
+The `else` branch is required, the condition must be a boolean, and both
+branches must produce the same type. Blocks are `{ declaration* expression }`:
+they may declare local variables and must end in exactly one expression. `if`
+is an ordinary expression, so it can appear anywhere an expression can, such
+as a declaration initializer or inside another `if`.
+
+Declarations inside a block are scoped to that block and are not visible
+outside it. A block may shadow a name declared in an enclosing scope; within a
+single scope (the program top level or one block), a name cannot be declared
+twice. Names resolve to the innermost enclosing declaration.
 
 ## Declarations and evaluation
 
-Declarations are evaluated from left to right and bind an immutable integer:
+Declarations are evaluated from left to right and bind an immutable value:
 
 ```text
 let first = 2;
@@ -103,37 +190,29 @@ second * 4
 ```
 
 An initializer can refer only to declarations that appear earlier in the same
-program. Variables cannot be reassigned or declared more than once. The final
-expression is evaluated after all declarations; a program containing only
-declarations is incomplete.
+program. Variables cannot be reassigned. The final expression is evaluated
+after all declarations; a program containing only declarations is incomplete.
 
-All values are signed 64-bit integers in the range `-9223372036854775808` to
-`9223372036854775807`. Arithmetic is checked. Addition, subtraction,
-multiplication, and unary negation report an error when their result is outside
-that range. Division truncates toward zero; division by zero and dividing
-`-9223372036854775808` by `-1` are errors. The `%` operator returns the
-remainder of truncated division, so its sign follows the dividend; it has the
-same checked semantics as `/`, and modulo by zero or
-`-9223372036854775808 % -1` are errors.
+## Type checking
 
-The `-` in a negative literal is parsed as prefix unary negation. The special
-literal `-9223372036854775808` is accepted, while its unnegated magnitude is
-not a valid value. Other out-of-range literal magnitudes are rejected. Unary
-`+` is not supported.
+Before evaluation, a static type checker walks the program and rejects
+ill-typed programs with a positioned error. The type rules are:
 
-Each comparison evaluates to the integer `1` when it is true and `0` when it is
-false. These comparison values can be assigned by `let` declarations and used
-as operands in later arithmetic:
+- `+` accepts two integers (adding) or two strings (concatenating).
+- `-`, `*`, `/`, and `%` accept two integers.
+- `<`, `<=`, `>`, and `>=` accept two integers and produce a boolean.
+- `==` and `!=` accept two values of the same type and produce a boolean.
+- `&&` and `||` accept two booleans and produce a boolean.
+- prefix `-` accepts an integer; prefix `!` accepts a boolean.
+- An `if` condition must be a boolean, and both `if` branches must have the
+  same type.
+- References to undeclared variables are errors.
 
-```text
-let ready = 3 >= 2;
-ready * 10
-```
-
-This program evaluates to `10`.
-
-The standalone `!` and `=` tokens are not comparison operators. Use `!=` for
-inequality, `==` for equality, and a single `=` only in a `let` declaration.
+Type-error messages name the offending operator, the expected operand types,
+and the types found, for example
+`type mismatch in '+': expected two integers or two strings, found integer and
+boolean`. The type names used in messages are `integer`, `boolean`, and
+`string`.
 
 ## Operator precedence
 
@@ -142,19 +221,23 @@ default order:
 
 | Precedence | Operators | Associativity |
 | ---: | --- | --- |
-| Highest | prefix `-` | right-to-left |
-| 3 | `*`, `/`, `%` | left-to-right |
-| 2 | `+`, `-` | left-to-right |
-| Lowest | `<`, `<=`, `>`, `>=`, `==`, `!=` | at most one per expression level |
+| Highest | prefix `-`, prefix `!` | right-to-left |
+| 4 | `*`, `/`, `%` | left-to-right |
+| 3 | `+`, `-` | left-to-right |
+| 2 | `<`, `<=`, `>`, `>=`, `==`, `!=` | at most one per expression level |
+| 1 | `&&` | left-to-right |
+| Lowest | `||` | left-to-right |
 
 For example, `-2 * 3 + 4` evaluates as `((-2) * 3) + 4`, while `10 - 3 - 2`
 evaluates as `(10 - 3) - 2`. Arithmetic binds more tightly than comparisons,
-so `1 + 2 < 4 * 2` evaluates as `(1 + 2) < (4 * 2)`.
+so `1 + 2 < 4 * 2` evaluates as `(1 + 2) < (4 * 2)`, and `&&` binds more
+tightly than `||`, so `true || false && false` evaluates as
+`true || (false && false)`.
 
 An expression level may contain at most one comparison operator. Chained or
 mixed comparisons such as `1 < 2 < 3` and `1 < 2 == 1` are rejected. Use
-parentheses to make separate comparisons explicit, as in
-`(1 < 2) == (2 < 3)`.
+`&&`/`||` or parentheses to combine comparisons, as in
+`1 < 2 && 2 < 3` or `(1 < 2) == (2 < 3)`.
 
 ## Errors
 
@@ -165,16 +248,21 @@ standard error, prints no result, and exits unsuccessfully. Errors include:
 - a missing file path, conflicting source modes, or an unreadable source file;
 - inline, file, or standard-input source that is not valid UTF-8;
 - an empty expression, malformed declarations, or a missing final expression;
-- unexpected characters, standalone `!` or `=`, unsupported unary `+`,
-  unmatched parentheses, chained comparisons, or trailing input;
+- unexpected characters, unsupported unary `+`, unmatched parentheses, chained
+  comparisons, or trailing input;
 - an unterminated block comment;
+- an unterminated string literal or an invalid escape sequence in a string
+  literal;
 - integer literals outside the supported range;
 - undefined or forward-referenced variables and duplicate declarations;
+- type errors such as mixing operands of different types, a non-boolean `if`
+  condition, or `if` branches of different types;
 - arithmetic overflow, including negating the minimum integer, dividing it
   by `-1`, or computing `-9223372036854775808 % -1`;
 - division by zero and modulo by zero;
 - a source program longer than the configured input limit; and
-- expressions or prefix `-` chains nested more deeply than the nesting limit.
+- expressions or prefix `-`/`!` chains nested more deeply than the nesting
+  limit.
 
 When `--positions` is supplied, the CLI appends ` at line L, column C` to the
 error so the failure can be located in the source.
@@ -185,4 +273,6 @@ For example:
 error: division by zero
 error: undefined variable: 'missing'
 error: integer addition overflow
+error: type mismatch in '+': expected two integers or two strings, found integer and boolean
+error: if branches must have the same type, found integer and string
 ```

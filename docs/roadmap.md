@@ -116,9 +116,12 @@ and an agent-facing toolkit, while keeping it stable, predictable, and
 agent-friendly. The v2 series deliberately breaks the v1.0 contract; the
 headline change is a public `Value` type in place of the bare `i64` result.
 
-**Status:** Planned. No v2 development has started. The task list below is
-the v2 backlog; each release picks the tasks it will ship, and tasks are not
-bound to a specific version.
+**Status:** The v2.0.0 foundation (richer values) is delivered: the public
+`Value` type, booleans, strings, `if`/`else`, and the static type checker are
+shipped and documented. Functions, the agent-facing toolkit, and the remaining
+stability items are still open. The task list below is the v2 backlog; each
+release picks the tasks it will ship, and tasks are not bound to a specific
+version.
 
 ### Series commitments
 
@@ -143,23 +146,23 @@ completion. Developers choose which tasks ship in each release.
 
 **Richer values (breaking foundation)**
 
-- [ ] Introduce a public `Value` enum (`Int(i64)`, `Bool(bool)`,
+- [x] Introduce a public `Value` enum (`Int(i64)`, `Bool(bool)`,
   `String(String)`) and change `evaluate` and `evaluate_with_limits` to
   return `Result<Value, Error>`. `Error`, `SourcePosition`, and `Limits`
   stay unchanged, and the CLI prints each value via its `Display` impl
   (integers, `true`/`false`, and strings without surrounding quotes).
-- [ ] Add `true`/`false` literals and make comparisons produce a real
+- [x] Add `true`/`false` literals and make comparisons produce a real
   boolean instead of integer `1`/`0`; add prefix `!` and short-circuiting
   `&&`/`||`. This changes existing programs such as
   `let ready = 3 >= 2; ready * 10`, which becomes a type error.
-- [ ] Add `"..."` string literals with `\n`, `\t`, `\\`, and `\"` escapes;
+- [x] Add `"..."` string literals with `\n`, `\t`, `\\`, and `\"` escapes;
   `+` concatenates strings and `==`/`!=` compares them.
-- [ ] Add `if`/`else` expressions with expression blocks
+- [x] Add `if`/`else` expressions with expression blocks
   (`{ let ...; expression }`) and lexical scoping; `else` is required and
   both branches must have the same type.
-- [ ] Add a lightweight static type checker so ill-typed programs fail with
+- [x] Add a lightweight static type checker so ill-typed programs fail with
   a positioned type error before evaluation instead of at runtime.
-- [ ] Update the property-based reference model for boolean comparison
+- [x] Update the property-based reference model for boolean comparison
   results plus boolean and string coverage; keep the fuzz targets on the
   `evaluate` entry point.
 
@@ -191,11 +194,13 @@ completion. Developers choose which tasks ship in each release.
 
 **Stability and distribution**
 
-- [ ] Switch the CI semver job from a v1 baseline to `release-type: major`
-  while the breaking v2 window is open, then to the first v2 tag as baseline
-  once it ships, so later 2.x releases stay backward compatible.
-- [ ] Add runnable examples and tutorial sections for booleans, strings,
-  control flow, and functions as each feature lands.
+- [x] Switch the CI semver job from a v1 baseline to `release-type: major`
+  while the breaking v2 window is open (the first half of this item; switching
+  the baseline to the first v2 tag happens when v2.0.0 ships), so later 2.x
+  releases stay backward compatible.
+- [x] Add runnable examples and tutorial sections for booleans, strings, and
+  control flow as those features land (the functions examples and tutorial
+  sections land with the functions group).
 
 ### Deferred beyond v2
 

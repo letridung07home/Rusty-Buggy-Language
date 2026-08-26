@@ -5,13 +5,15 @@ more effectively.
 
 The command-line evaluator accepts an inline program, a UTF-8 source file, or
 UTF-8 standard input. Each program contains zero or more sequential, immutable
-`let` declarations followed by one final integer expression. It supports ASCII
-decimal integer literals, identifiers, parentheses, prefix `-`, the comparison
-operators `<`, `<=`, `>`, `>=`, `==`, and `!=`, the arithmetic operators `+`,
-`-`, `*`, `/`, and `%` with checked signed 64-bit arithmetic, and `//` line
-comments and `/* */` block comments. Comparisons produce integer `1` for true
-and `0` for false, so their results can be stored in variables or used in
-later arithmetic.
+`let` declarations followed by one final expression. It supports ASCII
+decimal integer literals, `true`/`false` literals, `"..."` string literals
+(with `\n`, `\t`, `\\`, and `\"` escapes), identifiers, parentheses, prefix
+`-` and `!`, the comparison operators `<`, `<=`, `>`, `>=`, `==`, and `!=`,
+short-circuiting `&&` and `||`, the arithmetic operators `+`, `-`, `*`, `/`,
+and `%` with checked signed 64-bit arithmetic, `if`/`else` expressions with
+`{ }` blocks and lexical scoping, and `//` line comments and `/* */` block
+comments. Comparisons produce real booleans, `+` concatenates strings, and a
+static type checker rejects ill-typed programs before evaluation.
 
 For the complete grammar, evaluation rules, operator precedence, CLI behavior,
 and error conditions, see the [language reference](docs/language.md). The
@@ -32,8 +34,14 @@ cargo run -- "-(1 + 2) * -3"
 cargo run -- "let rate = 20; let quantity = 5; rate * quantity"
 # 100
 
-cargo run -- "let ready = 3 >= 2; ready * 10"
+cargo run -- "let ready = 3 >= 2; if ready { 10 } else { 0 }"
 # 10
+
+cargo run -- "\"hello\" + \" \" + \"world\""
+# hello world
+
+cargo run -- "let temp = 32; if temp > 30 { \"hot\" } else { \"cold\" }"
+# hot
 
 cargo run -- "1 /* group */ + 2 * 3 // note"
 # 7
