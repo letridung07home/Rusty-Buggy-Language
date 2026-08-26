@@ -122,7 +122,10 @@ mod tests {
         assert_eq!(Value::Int(-7).to_string(), "-7");
         assert_eq!(Value::Bool(true).to_string(), "true");
         assert_eq!(Value::Bool(false).to_string(), "false");
-        assert_eq!(Value::String("hello world".to_owned()).to_string(), "hello world");
+        assert_eq!(
+            Value::String("hello world".to_owned()).to_string(),
+            "hello world"
+        );
         assert_eq!(Value::String(String::new()).to_string(), "");
     }
 
@@ -161,7 +164,10 @@ mod tests {
         let limits = Limits { max_input_bytes: 9 };
 
         // "1 + 2 + 3" is exactly 9 bytes.
-        assert_eq!(evaluate_with_limits("1 + 2 + 3", &limits), Ok(Value::Int(6)));
+        assert_eq!(
+            evaluate_with_limits("1 + 2 + 3", &limits),
+            Ok(Value::Int(6))
+        );
     }
 
     #[test]
@@ -190,13 +196,19 @@ mod tests {
             evaluate("let rate = 20; // per hour\nrate * 5"),
             Ok(Value::Int(100))
         );
-        assert_eq!(evaluate("let a = 1; /* multi\nline */ a + 1"), Ok(Value::Int(2)));
+        assert_eq!(
+            evaluate("let a = 1; /* multi\nline */ a + 1"),
+            Ok(Value::Int(2))
+        );
     }
 
     #[test]
     fn evaluates_modulo_through_the_library_facade() {
         assert_eq!(evaluate("10 % 3"), Ok(Value::Int(1)));
-        assert_eq!(evaluate("let a = 10; let b = a % 3; b + 1"), Ok(Value::Int(2)));
+        assert_eq!(
+            evaluate("let a = 10; let b = a % 3; b + 1"),
+            Ok(Value::Int(2))
+        );
     }
 
     #[test]

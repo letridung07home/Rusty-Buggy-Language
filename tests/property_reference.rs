@@ -263,8 +263,13 @@ fn assert_agrees(source: &str, expected: Option<i64>) {
     match (evaluate(source), expected) {
         (Ok(Value::Int(actual)), Some(expect)) => assert_eq!(actual, expect, "source: {source}"),
         (Err(_), None) => {}
-        (Ok(actual), None) => {
+        (Ok(Value::Int(actual)), None) => {
             panic!("pipeline succeeded with {actual} but the reference failed: {source}")
+        }
+        // v2.0 evaluation only ever produces Int, so a Bool or String here
+        // means the pipeline drifted from the integer reference model.
+        (Ok(Value::Bool(_) | Value::String(_)), _) => {
+            panic!("pipeline produced a non-integer value: {source}")
         }
         (Err(error), Some(_)) => {
             panic!("reference succeeded but the pipeline failed ({error}): {source}")
