@@ -7,12 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-08-26
+
+### Added
+
+- Attached a `SHA256SUMS` file to each GitHub release so users can verify
+  the downloaded binaries against their published hashes.
+
 ### Fixed
 
-- Fixed the release workflow dropping the macOS binary: each platform
-  artifact now downloads into its own subdirectory instead of being merged,
-  so the Linux and macOS binaries (which share the name `rusty-buggy-language`)
-  no longer overwrite each other in the uploaded release.
+- Fixed the release workflow dropping the macOS binary and accidentally
+  clobbering same-named builds: released binaries are now named by platform
+  (`rusty-buggy-language-linux`, `rusty-buggy-language-macos`,
+  `rusty-buggy-language-windows.exe`), so the Linux, macOS, and Windows
+  artifacts never overwrite one another in the uploaded release.
 
 ## [1.5.0] - 2026-08-26
 

@@ -90,7 +90,10 @@ source selection and complete UTF-8 input read
   check.
   `.github/workflows/release.yml` creates releases from validated version tags,
   extracts their descriptions from `CHANGELOG.md`, and attaches prebuilt
-  Linux, macOS, and Windows `x86_64` binaries built from the tag. All three
+  Linux, macOS, and Windows binaries built from the tag. Each binary is
+  published under a platform-suffixed name (`rusty-buggy-language-<platform>`)
+  so the three artifacts never collide, and a `SHA256SUMS` file of their
+  checksums is attached so users can verify downloaded builds. All three
   workflows cache Cargo build artifacts with `Swatinem/rust-cache`; the fuzz
   job pins a specific nightly date so its cache key stays stable across days.
 
