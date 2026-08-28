@@ -1,11 +1,14 @@
-use crate::ast::{BinaryOperator, Declaration, Expression, Program};
+use crate::ast::{BinaryOperator, Block, Declaration, Expression, Program};
 use crate::error::{Error, SourcePosition};
 use crate::lexer::{Token, TokenKind};
 
 /// Maximum recursive nesting depth the parser accepts before refusing input.
-/// This is intentionally far below the thread stack budget so adversarial
-/// input reports a clear error instead of overflowing the stack.
-const MAX_DEPTH: usize = 256;
+///
+/// Kept well below the thread stack budget: each nesting level recurses
+/// through the whole expression-precedence chain (about eight frames per
+/// level), so an overly deep limit would overflow the stack on adversarial
+/// input instead of reporting a clear error.
+const MAX_DEPTH: usize = 128;
 
 pub(crate) struct Parser<'a> {
     tokens: &'a [Token],
@@ -23,76 +26,7 @@ impl<'a> Parser<'a> {
     }
 
     pub(crate) fn parse(mut self) -> Result<Program, Error> {
-        let mut declarations = Vec::new();
-
-        while matches!(self.peek_kind(), Some(TokenKind::Let)) {
-            let declaration_position = self.peek().map(|token| token.position);
-            self.advance();
-
-            let name = match self.advance() {
-                Some(Token {
-                    kind: TokenKind::Identifier(name),
-                    ..
-                }) => name.clone(),
-                Some(token) => {
-                    return Err(Error::at(
-                        "expected a variable name after 'let'",
-                        token.position,
-                    ))
-                }
-                None => return Err(self.error_here("expected a variable name after 'let'")),
-            };
-
-            let equals = self.advance();
-            if !matches!(
-                equals,
-                Some(Token {
-                    kind: TokenKind::Equals,
-                    ..
-                })
-            ) {
-                let position = equals.map(|token| token.position).or(declaration_position);
-                return Err(Error::at(
-                    format!("expected '=' after variable name '{name}'"),
-                    position.unwrap_or(SourcePosition { line: 1, column: 1 }),
-                ));
-            }
-
-            let initializer = self.parse_expression()?;
-
-            let semicolon = self.advance();
-            if !matches!(
-                semicolon,
-                Some(Token {
-                    kind: TokenKind::Semicolon,
-                    ..
-                })
-            ) {
-                let position = semicolon
-                    .map(|token| token.position)
-                    .or(declaration_position);
-                return Err(Error::at(
-                    format!("expected ';' after declaration of '{name}'"),
-                    position.unwrap_or(SourcePosition { line: 1, column: 1 }),
-                ));
-            }
-
-            if declarations
-                .iter()
-                .any(|declaration: &Declaration| declaration.name == name)
-            {
-                return Err(Error::at(
-                    format!("duplicate variable declaration: '{name}'"),
-                    declaration_position.unwrap_or(SourcePosition { line: 1, column: 1 }),
-                ));
-            }
-
-            declarations.push(Declaration {
-                name,
-                initializer,
-                position: declaration_position,
-            });
-        }
+        let declarations = self.parse_declarations()?;
 
         if self.tokens.is_empty() || self.peek().is_none() {
             if declarations.is_empty() {
@@ -107,6 +41,9 @@ impl<'a> Parser<'a> {
             if token.kind == TokenKind::RightParen {
                 return Err(Error::at("unmatched ')'", token.position));
             }
+            if token.kind == TokenKind::RightBrace {
+                return Err(Error::at("unexpected '}'", token.position));
+            }
             return Err(Error::at(
                 format!("unexpected trailing token: {}", token.kind_name()),
                 token.position,
@@ -119,11 +56,126 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parses zero or more `let` declarations that belong to the current
+    /// scope (the program top level or one block).
+    fn parse_declarations(&mut self) -> Result<Vec<Declaration>, Error> {
+        let mut declarations = Vec::new();
+
+        while matches!(self.peek_kind(), Some(TokenKind::Let)) {
+            declarations.push(self.parse_declaration(&declarations)?);
+        }
+
+        Ok(declarations)
+    }
+
+    fn parse_declaration(&mut self, existing: &[Declaration]) -> Result<Declaration, Error> {
+        let declaration_position = self.peek().map(|token| token.position);
+        self.advance(); // consume 'let'
+
+        let name = match self.advance() {
+            Some(Token {
+                kind: TokenKind::Identifier(name),
+                ..
+            }) => name.clone(),
+            Some(token) => {
+                return Err(Error::at(
+                    "expected a variable name after 'let'",
+                    token.position,
+                ))
+            }
+            None => return Err(self.error_here("expected a variable name after 'let'")),
+        };
+
+        let equals = self.advance();
+        if !matches!(
+            equals,
+            Some(Token {
+                kind: TokenKind::Equals,
+                ..
+            })
+        ) {
+            let position = equals.map(|token| token.position).or(declaration_position);
+            return Err(Error::at(
+                format!("expected '=' after variable name '{name}'"),
+                position.unwrap_or(SourcePosition { line: 1, column: 1 }),
+            ));
+        }
+
+        let initializer = self.parse_expression()?;
+
+        let semicolon = self.advance();
+        if !matches!(
+            semicolon,
+            Some(Token {
+                kind: TokenKind::Semicolon,
+                ..
+            })
+        ) {
+            let position = semicolon
+                .map(|token| token.position)
+                .or(declaration_position);
+            return Err(Error::at(
+                format!("expected ';' after declaration of '{name}'"),
+                position.unwrap_or(SourcePosition { line: 1, column: 1 }),
+            ));
+        }
+
+        if existing
+            .iter()
+            .any(|declaration: &Declaration| declaration.name == name)
+        {
+            return Err(Error::at(
+                format!("duplicate variable declaration: '{name}'"),
+                declaration_position.unwrap_or(SourcePosition { line: 1, column: 1 }),
+            ));
+        }
+
+        Ok(Declaration {
+            name,
+            initializer,
+            position: declaration_position,
+        })
+    }
+
     fn parse_expression(&mut self) -> Result<Expression, Error> {
         self.enter()?;
-        let expression = self.parse_comparison();
+        let expression = self.parse_or();
         self.leave();
         expression
+    }
+
+    fn parse_or(&mut self) -> Result<Expression, Error> {
+        let mut expression = self.parse_and()?;
+
+        while matches!(self.peek_kind(), Some(TokenKind::OrOr)) {
+            let position = self.peek().map(|token| token.position);
+            self.advance();
+            let right = self.parse_and()?;
+            expression = Expression::LogicalOr {
+                left: Box::new(expression),
+                right: Box::new(right),
+                position,
+            };
+        }
+
+        Ok(expression)
+    }
+
+    fn parse_and(&mut self) -> Result<Expression, Error> {
+        let mut expression = self.parse_comparison()?;
+
+        while matches!(self.peek_kind(), Some(TokenKind::AndAnd)) {
+            let position = self.peek().map(|token| token.position);
+            self.advance();
+            let right = self.parse_comparison()?;
+            expression = Expression::LogicalAnd {
+                left: Box::new(expression),
+                right: Box::new(right),
+                position,
+            };
+        }
+
+        Ok(expression)
     }
 
     fn parse_comparison(&mut self) -> Result<Expression, Error> {
@@ -196,14 +248,27 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_unary(&mut self) -> Result<Expression, Error> {
-        if matches!(self.peek_kind(), Some(TokenKind::Minus)) {
+        let operator = match self.peek_kind() {
+            Some(TokenKind::Minus) => Some(UnaryOperator::Negation),
+            Some(TokenKind::Bang) => Some(UnaryOperator::Not),
+            _ => None,
+        };
+
+        if let Some(operator) = operator {
             let position = self.peek().map(|token| token.position);
             self.advance();
             let operand = self.parse_unary_nested()?;
-            return Ok(Expression::UnaryNegation {
-                operand: Box::new(operand),
-                position,
-            });
+            let expression = match operator {
+                UnaryOperator::Negation => Expression::UnaryNegation {
+                    operand: Box::new(operand),
+                    position,
+                },
+                UnaryOperator::Not => Expression::UnaryNot {
+                    operand: Box::new(operand),
+                    position,
+                },
+            };
+            return Ok(expression);
         }
 
         self.parse_primary()
@@ -217,12 +282,45 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_primary(&mut self) -> Result<Expression, Error> {
+        // Handle `if` before the advancing match: the If arm calls a
+        // `&mut self` method, which is not allowed while the match
+        // scrutinee's borrow of `self` is still alive.
+        if matches!(self.peek_kind(), Some(TokenKind::If)) {
+            let position = self
+                .peek()
+                .map(|token| token.position)
+                .expect("the 'if' token was peeked above");
+            self.advance();
+            return self.parse_if_expression(position);
+        }
+
         match self.advance() {
             Some(Token {
                 kind: TokenKind::Integer(value),
                 position,
             }) => Ok(Expression::Literal {
                 value: *value,
+                position: Some(*position),
+            }),
+            Some(Token {
+                kind: TokenKind::String(value),
+                position,
+            }) => Ok(Expression::StringLiteral {
+                value: value.clone(),
+                position: Some(*position),
+            }),
+            Some(Token {
+                kind: TokenKind::True,
+                position,
+            }) => Ok(Expression::BoolLiteral {
+                value: true,
+                position: Some(*position),
+            }),
+            Some(Token {
+                kind: TokenKind::False,
+                position,
+            }) => Ok(Expression::BoolLiteral {
+                value: false,
                 position: Some(*position),
             }),
             Some(Token {
@@ -248,27 +346,91 @@ impl<'a> Parser<'a> {
             }
             Some(token) => match &token.kind {
                 TokenKind::RightParen => Err(Error::at("unexpected ')'", token.position)),
-                TokenKind::Let
-                | TokenKind::Equals
-                | TokenKind::LessThan
-                | TokenKind::LessThanOrEqual
-                | TokenKind::GreaterThan
-                | TokenKind::GreaterThanOrEqual
-                | TokenKind::EqualEqual
-                | TokenKind::NotEqual
-                | TokenKind::Semicolon
-                | TokenKind::Plus
-                | TokenKind::Minus
-                | TokenKind::Star
-                | TokenKind::Slash
-                | TokenKind::Percent => Err(Error::at("expected an expression", token.position)),
-                TokenKind::Integer(_) | TokenKind::Identifier(_) | TokenKind::LeftParen => {
-                    // Unreachable: these arms are handled above.
-                    Err(Error::at("expected an expression", token.position))
-                }
+                TokenKind::RightBrace => Err(Error::at("unexpected '}'", token.position)),
+                _ => Err(Error::at("expected an expression", token.position)),
             },
             None => Err(self.error_here("expected an expression")),
         }
+    }
+
+    fn parse_if_expression(&mut self, position: SourcePosition) -> Result<Expression, Error> {
+        let condition = self.parse_expression()?;
+        let then_branch = self.parse_if_block("after if condition")?;
+
+        match self.advance() {
+            Some(Token {
+                kind: TokenKind::Else,
+                ..
+            }) => {}
+            Some(token) => {
+                return Err(Error::at(
+                    "expected 'else' after the if branch",
+                    token.position,
+                ))
+            }
+            None => return Err(self.error_here("expected 'else' after the if branch")),
+        }
+
+        let else_branch = self.parse_if_block("after 'else'")?;
+
+        Ok(Expression::If {
+            condition: Box::new(condition),
+            then_branch: Box::new(then_branch),
+            else_branch: Box::new(else_branch),
+            position: Some(position),
+        })
+    }
+
+    /// Parses the `{ declaration* expression }` block that follows an `if`
+    /// condition or an `else`. `context` names the offending position in the
+    /// error message when the block is missing.
+    fn parse_if_block(&mut self, context: &str) -> Result<Block, Error> {
+        if !matches!(self.peek_kind(), Some(TokenKind::LeftBrace)) {
+            return match self.peek() {
+                Some(token) => Err(Error::at(
+                    format!("expected a block {context}"),
+                    token.position,
+                )),
+                None => Err(Error::new(format!("expected a block {context}"))),
+            };
+        }
+
+        self.parse_block()
+    }
+
+    fn parse_block(&mut self) -> Result<Block, Error> {
+        self.advance(); // consume '{'
+
+        let declarations = self.parse_declarations()?;
+        let expression = self.parse_block_expression(&declarations)?;
+
+        match self.advance() {
+            Some(Token {
+                kind: TokenKind::RightBrace,
+                ..
+            }) => Ok(Block {
+                declarations,
+                expression,
+            }),
+            Some(token) => Err(Error::at("expected '}' to close the block", token.position)),
+            None => Err(self.error_here("expected '}' to close the block")),
+        }
+    }
+
+    /// Parses the final expression of a block, which is terminated by `}`
+    /// rather than the end of input.
+    fn parse_block_expression(
+        &mut self,
+        declarations: &[Declaration],
+    ) -> Result<Expression, Error> {
+        if self.peek().is_none() || matches!(self.peek_kind(), Some(TokenKind::RightBrace)) {
+            if declarations.is_empty() {
+                return Err(self.error_here("expression is empty"));
+            }
+            return Err(self.error_here("expected a final expression after declarations"));
+        }
+
+        self.parse_expression()
     }
 
     fn enter(&mut self) -> Result<(), Error> {
@@ -317,6 +479,12 @@ impl<'a> Parser<'a> {
             _ => None,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum UnaryOperator {
+    Negation,
+    Not,
 }
 
 #[cfg(test)]
@@ -448,7 +616,7 @@ mod tests {
 
     #[test]
     fn accepts_deep_parentheses_within_the_limit() {
-        let depth = 200;
+        let depth = 100;
         let input = format!("{}{}{}", "(".repeat(depth), "1", ")".repeat(depth));
         assert!(parses_ok(&input));
     }
@@ -472,5 +640,101 @@ mod tests {
         let depth = 100;
         let input = format!("{}1", "-".repeat(depth));
         assert!(parses_ok(&input));
+    }
+
+    #[test]
+    fn accepts_boolean_literals_and_logical_operators() {
+        for program in [
+            "true",
+            "false",
+            "!true",
+            "!!false",
+            "true && false",
+            "true || false",
+            "true && false || !true",
+            "1 < 2 && 2 < 3",
+            "let ready = 3 >= 2; ready && true",
+        ] {
+            assert!(parses_ok(program), "program: {program}");
+        }
+    }
+
+    #[test]
+    fn accepts_string_literals_and_concatenation() {
+        for program in [
+            r#""hello""#,
+            r#""a" + "b" + "c""#,
+            r#"let greeting = "hi"; greeting == "hi""#,
+        ] {
+            assert!(parses_ok(program), "program: {program}");
+        }
+    }
+
+    #[test]
+    fn accepts_if_expressions_with_blocks() {
+        for program in [
+            "if true { 1 } else { 2 }",
+            "if 1 < 2 { \"a\" } else { \"b\" }",
+            "let x = if true { 1 } else { 2 }; x",
+            "if true { let x = 1; x } else { let y = 2; y }",
+            "let x = 1; if true { let x = 2; x } else { x }",
+            "if true { if false { 1 } else { 2 } } else { 3 }",
+            "if (1 < 2) && (2 < 3) { 1 } else { 2 }",
+        ] {
+            assert!(parses_ok(program), "program: {program}");
+        }
+    }
+
+    #[test]
+    fn rejects_if_expressions_with_missing_parts() {
+        assert_eq!(
+            parse_error("if true { 1 }"),
+            "expected 'else' after the if branch"
+        );
+        assert_eq!(
+            parse_error("if true 1 else 2"),
+            "expected a block after if condition"
+        );
+        assert_eq!(
+            parse_error("if true { 1 } else 2"),
+            "expected a block after 'else'"
+        );
+        assert_eq!(
+            parse_error("if true"),
+            "expected a block after if condition"
+        );
+        assert_eq!(parse_error("if { 1 } else { 2 }"), "expected an expression");
+    }
+
+    #[test]
+    fn rejects_blocks_without_a_final_expression() {
+        assert_eq!(parse_error("if true {} else { 2 }"), "expression is empty");
+        assert_eq!(
+            parse_error("if true { let x = 1; } else { 2 }"),
+            "expected a final expression after declarations"
+        );
+    }
+
+    #[test]
+    fn rejects_unclosed_blocks() {
+        assert_eq!(
+            parse_error("if true { 1"),
+            "expected '}' to close the block"
+        );
+    }
+
+    #[test]
+    fn rejects_stray_braces() {
+        assert_eq!(parse_error("1 }"), "unexpected '}'");
+        assert_eq!(parse_error("{ 1 }"), "expected an expression");
+    }
+
+    #[test]
+    fn rejects_duplicate_variables_within_a_block_but_allows_shadowing() {
+        assert_eq!(
+            parse_error("if true { let x = 1; let x = 2; x } else { 1 }"),
+            "duplicate variable declaration: 'x'"
+        );
+        assert!(parses_ok("let x = 1; if true { let x = 2; x } else { x }"));
     }
 }

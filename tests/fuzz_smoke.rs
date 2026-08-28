@@ -33,7 +33,7 @@ impl Prng {
 /// A byte-oriented source alphabet covering every token the lexer recognizes,
 /// plus syntactic glue, whitespace, and comment markers.
 const SOURCE_ALPHABET: &[u8] =
-    b"letabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_+-*/%()<>=!; \n\t\r/";
+    b"letabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_+-*/%()<>=!; \n\t\r/\"{}&|";
 
 /// Programs that stress otherwise-rare code paths.
 const EDGE_PROGRAMS: &[&str] = &[
@@ -47,6 +47,27 @@ const EDGE_PROGRAMS: &[&str] = &[
     "1 /* unterminated",
     "1 < 2 < 3",
     "let a = 1; let a = 2; a",
+    "\"unterminated",
+    "\"a\\",
+    "\"a\\x\"",
+    "\"tab\\tend\"",
+    "\"say \\\"hi\\\"\"",
+    "1 + true",
+    "1 == \"a\"",
+    "true && 1",
+    "!5",
+    "if 1 { 2 } else { 3 }",
+    "if true { \"a\" } else { \"b\" }",
+    "if true { 1 } else { \"a\" }",
+    "if true { 1",
+    "true && false || !true",
+    "false && 8 / (3 - 3) == 1",
+    "true || 8 / (3 - 3) == 1",
+    "let x = true; if x { 10 } else { 0 }",
+    "let x = 1; if true { let x = 2; x } else { x }",
+    "{ 1 }",
+    "1 }",
+    "if true { 1 } else { 2 } else { 3 }",
 ];
 
 fn fuzz_iterations(mut prng: Prng, target: usize) {

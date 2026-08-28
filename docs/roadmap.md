@@ -116,10 +116,12 @@ and an agent-facing toolkit, while keeping it stable, predictable, and
 agent-friendly. The v2 series deliberately breaks the v1.0 contract; the
 headline change is a public `Value` type in place of the bare `i64` result.
 
-**Status:** In progress. v2.0.0 is delivered and opens the series with the
-breaking typed-`Value` foundation; the remaining backlog below ships in
-later 2.x releases (v2.1+), each backward compatible with the v2.0.0
-contract.
+**Status:** In progress. v2.0.0 opened the series with the breaking
+typed-`Value` foundation, and v2.1.0 ships the richer-values milestone:
+booleans, strings, `if`/`else`, and the static type checker. Functions, the
+agent-facing toolkit, and the remaining stability items are still open. The
+task list below is the v2 backlog; each release picks the tasks it will ship,
+and tasks are not bound to a specific version.
 
 ### Series commitments
 
@@ -149,28 +151,28 @@ contract.
   v2 window is open; the first v2 tag becomes the baseline at the v2.1
   release.
 
-### v2.1+ backlog
+### v2.1.0 milestone — delivered
+
+- [x] Add `true`/`false` literals and make comparisons produce a real
+  boolean instead of integer `1`/`0`; add prefix `!` and short-circuiting
+  `&&`/`||`. This changes existing programs such as
+  `let ready = 3 >= 2; ready * 10`, which becomes a type error.
+- [x] Add `"..."` string literals with `\n`, `\t`, `\\`, and `\"` escapes;
+  `+` concatenates strings and `==`/`!=` compares them.
+- [x] Add `if`/`else` expressions with expression blocks
+  (`{ let ...; expression }`) and lexical scoping; `else` is required and
+  both branches must have the same type.
+- [x] Add a lightweight static type checker so ill-typed programs fail with
+  a positioned type error before evaluation instead of at runtime.
+- [x] Update the property-based reference model for boolean comparison
+  results plus boolean and string coverage; keep the fuzz targets on the
+  `evaluate` entry point.
+
+### Remaining v2 backlog
 
 Concrete deliverables for the later v2 releases, grouped by theme and
 ordered by priority. Each one updates the language reference and changelog
 on completion. Developers choose which tasks ship in each release.
-
-**Richer values**
-
-- [ ] Add `true`/`false` literals and make comparisons produce a real
-  boolean instead of integer `1`/`0`; add prefix `!` and short-circuiting
-  `&&`/`||`. This changes existing programs such as
-  `let ready = 3 >= 2; ready * 10`, which becomes a type error.
-- [ ] Add `"..."` string literals with `\n`, `\t`, `\\`, and `\"` escapes;
-  `+` concatenates strings and `==`/`!=` compares them.
-- [ ] Add `if`/`else` expressions with expression blocks
-  (`{ let ...; expression }`) and lexical scoping; `else` is required and
-  both branches must have the same type.
-- [ ] Add a lightweight static type checker so ill-typed programs fail with
-  a positioned type error before evaluation instead of at runtime.
-- [ ] Update the property-based reference model for boolean comparison
-  results plus boolean and string coverage; keep the fuzz targets on the
-  `evaluate` entry point.
 
 **Functions**
 
@@ -200,10 +202,12 @@ on completion. Developers choose which tasks ship in each release.
 
 **Stability and distribution**
 
-- [ ] Set the CI semver job baseline to the first v2 tag once v2.0.0 ships,
-  so later 2.x releases stay backward compatible with the v2.0.0 contract.
-- [ ] Add runnable examples and tutorial sections for booleans, strings,
-  control flow, and functions as each feature lands.
+- [x] Set the CI semver job baseline to the first v2 tag (v2.0.0) once it
+  shipped, so later 2.x releases stay backward compatible with the v2.0.0
+  contract.
+- [x] Add runnable examples and tutorial sections for booleans, strings, and
+  control flow as those features land (the functions examples and tutorial
+  sections land with the functions group).
 
 ### Deferred beyond v2
 

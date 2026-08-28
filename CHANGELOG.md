@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added `true`/`false` boolean literals, prefix `!`, and short-circuiting
+  `&&` and `||` operators.
+- Added `"..."` string literals with `\n`, `\t`, `\\`, and `\"` escapes;
+  `+` concatenates strings and `==`/`!=` compare values of the same type.
+- Added `if`/`else` expressions with expression blocks
+  (`{ let ...; expression }`) and lexical scoping, with shadowing allowed
+  across scopes; `else` is required and both branches must have the same type.
+- Added a static type checker that rejects ill-typed programs with a
+  positioned type error before evaluation.
+- Added tutorial sections and runnable examples for booleans, strings, and
+  branching.
+
+### Changed
+
+- Comparisons now produce real booleans (`true`/`false`) instead of integer
+  `1`/`0`, so a comparison result can no longer feed arithmetic directly:
+  `let ready = 3 >= 2; ready * 10` is now a type error (write
+  `if ready { 10 } else { 0 }` instead).
+- The property-based reference model now generates and checks typed programs
+  covering booleans, strings, and `if`/`else` alongside integer arithmetic.
+- The parser nesting-depth limit is lowered to 128 levels: the richer
+  expression grammar recurses through more frames per nesting level, so 256
+  could overflow the stack on adversarial input instead of reporting
+  `program too deeply nested`.
+
 ## [2.0.1] - 2026-08-26
 
 ### Changed
@@ -36,7 +63,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   v2 window is open, so the deliberate v1-to-v2 API change is reported
   rather than failing the check; the first v2 tag becomes the baseline at
   the v2.1 release.
-
 ## [1.6.3] - 2026-08-26
 
 ### Added

@@ -1,6 +1,6 @@
 use crate::error::SourcePosition;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum BinaryOperator {
     Add,
     Subtract,
@@ -21,11 +21,23 @@ pub(crate) enum Expression {
         value: u64,
         position: Option<SourcePosition>,
     },
+    StringLiteral {
+        value: String,
+        position: Option<SourcePosition>,
+    },
+    BoolLiteral {
+        value: bool,
+        position: Option<SourcePosition>,
+    },
     Variable {
         name: String,
         position: Option<SourcePosition>,
     },
     UnaryNegation {
+        operand: Box<Expression>,
+        position: Option<SourcePosition>,
+    },
+    UnaryNot {
         operand: Box<Expression>,
         position: Option<SourcePosition>,
     },
@@ -35,6 +47,22 @@ pub(crate) enum Expression {
         right: Box<Expression>,
         position: Option<SourcePosition>,
     },
+    LogicalAnd {
+        left: Box<Expression>,
+        right: Box<Expression>,
+        position: Option<SourcePosition>,
+    },
+    LogicalOr {
+        left: Box<Expression>,
+        right: Box<Expression>,
+        position: Option<SourcePosition>,
+    },
+    If {
+        condition: Box<Expression>,
+        then_branch: Box<Block>,
+        else_branch: Box<Block>,
+        position: Option<SourcePosition>,
+    },
 }
 
 impl Expression {
@@ -42,9 +70,15 @@ impl Expression {
     pub(crate) fn position(&self) -> Option<SourcePosition> {
         match self {
             Expression::Literal { position, .. }
+            | Expression::StringLiteral { position, .. }
+            | Expression::BoolLiteral { position, .. }
             | Expression::Variable { position, .. }
             | Expression::UnaryNegation { position, .. }
-            | Expression::Binary { position, .. } => *position,
+            | Expression::UnaryNot { position, .. }
+            | Expression::Binary { position, .. }
+            | Expression::LogicalAnd { position, .. }
+            | Expression::LogicalOr { position, .. }
+            | Expression::If { position, .. } => *position,
         }
     }
 }
@@ -54,6 +88,14 @@ pub(crate) struct Declaration {
     pub(crate) name: String,
     pub(crate) initializer: Expression,
     pub(crate) position: Option<SourcePosition>,
+}
+
+/// A `{ declaration* expression }` block, used as the branch of an `if`/`else`
+/// expression. Declarations inside a block are scoped to that block.
+#[derive(Debug, PartialEq)]
+pub(crate) struct Block {
+    pub(crate) declarations: Vec<Declaration>,
+    pub(crate) expression: Expression,
 }
 
 #[derive(Debug, PartialEq)]

@@ -1,0 +1,7 @@
+// Strings concatenate with +, compare with ==/!=, and print without quotes.
+let greeting = "hello" + " " + "world";      // "hello world"
+let loud = greeting + "!";                   // "hello world!"
+let same = loud == "hello world!";           // true
+let escaped = "tab\there\nnew\\line";        // escapes decoded by the lexer
+
+same && escaped == "tab\there\nnew\\line"

@@ -156,12 +156,84 @@ fn reports_unterminated_block_comments() {
 }
 
 #[test]
-fn evaluates_comparison_program_and_prints_integer_boolean_result() {
+fn evaluates_comparison_program_and_prints_boolean_result() {
+    let output = run_cli(&["let ready = 3 >= 2; ready"]);
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"true\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn reports_comparison_results_used_in_arithmetic_as_a_type_error() {
     let output = run_cli(&["let ready = 3 >= 2; ready * 10"]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        output.stderr,
+        b"error: type mismatch in '*': expected two integers, found boolean and integer\n"
+    );
+}
+
+#[test]
+fn evaluates_boolean_programs_and_prints_true_or_false() {
+    let output = run_cli(&["1 < 2 && 3 < 4"]);
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"true\n");
+    assert!(output.stderr.is_empty());
+
+    let output = run_cli(&["true && false || true"]);
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"true\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn evaluates_string_programs_and_prints_without_quotes() {
+    let output = run_cli(&["\"hello\" + \" \" + \"world\""]);
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"hello world\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn evaluates_if_else_programs() {
+    let output = run_cli(&["if 1 < 2 { 10 } else { 20 }"]);
 
     assert!(output.status.success());
     assert_eq!(output.stdout, b"10\n");
     assert!(output.stderr.is_empty());
+
+    let output = run_cli(&["if 1 > 2 { \"hot\" } else { \"cold\" }"]);
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"cold\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn reports_type_errors_with_positions() {
+    let output = run_cli(&["--positions", "1 + true"]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        output.stderr,
+        b"error: type mismatch in '+': expected two integers or two strings, found integer and boolean\n at line 1, column 3\n"
+    );
+}
+
+#[test]
+fn reports_unterminated_string_literals() {
+    let output = run_cli(&["\"oops"]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(output.stderr, b"error: unterminated string literal\n");
 }
 
 #[test]
@@ -372,7 +444,7 @@ fn expected_help() -> String {
         "       rusty-buggy-language [--positions] [--input-limit <bytes>] -f <path> | --file <path>\n",
         "       rusty-buggy-language [--positions] [--input-limit <bytes>] --stdin\n",
         "\n",
-        "Evaluates an i64 integer program with immutable let bindings, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, %, // and /* */ comments, parentheses, and prefix -.\n",
+        "Evaluates an expression program with immutable let bindings, integers, booleans (true/false, !, &&, ||), strings (\"...\" with \\n, \\t, \\\\, and \\\" escapes), if/else expressions with { } blocks, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, %, // and /* */ comments, parentheses, and prefix -.\n",
         "\n",
         "The program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input. Source modes are mutually exclusive. `--repl` reads one program per line from standard input and prints each result.\n",
         "\n",

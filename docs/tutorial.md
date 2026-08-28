@@ -4,7 +4,8 @@ This tutorial walks through writing and running Rusty Buggy Language programs.
 It assumes you have [built and installed the evaluator](../CONTRIBUTING.md) or
 are running it through `cargo run -- <program>`. The language is a small,
 agent-friendly expression language: a program is zero or more immutable `let`
-declarations followed by exactly one final integer expression.
+declarations followed by exactly one final expression, which evaluates to an
+integer, a boolean, or a string.
 
 ## Your first program
 
@@ -52,27 +53,70 @@ cargo run -- "--1"
 
 ## Immutable variables
 
-Declare immutable integers with `let`. Each declaration is available to later
+Declare immutable values with `let`. Each declaration is available to later
 declarations and to the final expression, but never to earlier ones, and it
-cannot be redefined:
+cannot be redefined in the same scope:
 
 ```bash
 cargo run -- "let rate = 20; let quantity = 5; rate * quantity"
 # 100
 ```
 
-## Comparisons
+## Booleans and comparisons
 
-Each comparison evaluates to `1` (true) or `0` (false), so results can be
-stored and used in arithmetic:
+Each comparison evaluates to the boolean `true` or `false`, which combine with
+`!`, `&&`, and `||`:
 
 ```bash
-cargo run -- "let ready = 3 >= 2; ready * 10"
+cargo run -- "3 >= 2"
+# true
+
+cargo run -- "1 < 2 && 2 < 3"
+# true
+
+cargo run -- "!false || false"
+# true
+```
+
+`&&` and `||` short-circuit: the right side is only evaluated when it can
+change the result, so `false && 8 / (3 - 3) == 1` is `false` rather than a
+division-by-zero error. Because comparisons produce booleans, a comparison
+result cannot be multiplied: `let ready = 3 >= 2; ready * 10` is a type error.
+Branch on it with `if` instead.
+
+Comparisons cannot be chained; combine separate checks with `&&`/`||` or
+parentheses, as in `(1 < 2) == (2 < 3)`.
+
+## Strings
+
+String literals use double quotes, with `\n`, `\t`, `\\`, and `\"` escapes.
+`+` concatenates strings, and `==`/`!=` compare them:
+
+```bash
+cargo run -- "\"hello\" + \" \" + \"world\""
+# hello world
+
+cargo run -- "\"a\" == \"b\""
+# false
+```
+
+Strings print without surrounding quotes.
+
+## if/else expressions
+
+An `if` expression picks between two blocks. The condition must be a boolean
+and both branches must produce the same type:
+
+```bash
+cargo run -- "let temp = 32; if temp > 30 { \"hot\" } else { \"cold\" }"
+# hot
+
+cargo run -- "let score = 7; if score > 5 { let bonus = 3; score + bonus } else { score }"
 # 10
 ```
 
-Comparisons cannot be chained; use parentheses for separate checks, as in
-`(1 < 2) == (2 < 3)`.
+Blocks may declare local variables that are scoped to the block, and may
+shadow names from an enclosing scope.
 
 ## Comments
 
@@ -112,6 +156,8 @@ cargo run -- --repl
 3
 > let x = 9; x / 2
 4
+> 3 >= 2 && 1 < 2
+true
 > (press Ctrl-D to exit)
 ```
 
@@ -121,7 +167,9 @@ The `examples/` directory contains runnable programs for each feature:
 
 - `hello.rbl` — the simplest expression.
 - `arithmetic.rbl` — every arithmetic operator.
-- `comparisons.rbl` — comparisons as `1`/`0`.
+- `comparisons.rbl` — comparisons as real booleans with `&&`, `||`, and `!`.
+- `strings.rbl` — string concatenation, escapes, and equality.
+- `branching.rbl` — `if`/`else` with scoped declarations.
 - `fahrenheit.rbl` — an inline conversion.
 - `session.rbl` — a multi-step immutable-binding program.
 
@@ -131,5 +179,5 @@ Run any of them with:
 cargo run -- --file examples/session.rbl
 ```
 
-For the complete grammar, precedence, resource limits, and the full list of
-error conditions, see the [language reference](language.md).
+For the complete grammar, precedence, type rules, resource limits, and the full
+list of error conditions, see the [language reference](language.md).
