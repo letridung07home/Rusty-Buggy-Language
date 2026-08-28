@@ -502,7 +502,8 @@ fn random_program(prng: &mut Prng) -> Program {
         names.push((name, target));
     }
 
-    let expression = random_expr(prng, 4, random_type(prng), &names);
+    let target = random_type(prng);
+    let expression = random_expr(prng, 4, target, &names);
 
     Program {
         declarations,
