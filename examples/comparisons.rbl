@@ -1,7 +1,8 @@
-// Comparisons produce 1 (true) or 0 (false).
-let ready = 3 >= 2;            // 1
-let equal = (1 + 1) == 2;      // 1
-let strict = 5 < 5;            // 0
-let mixed = ready * 10 + equal;// 11 (booleans feed arithmetic)
+// Comparisons produce real booleans, which combine with &&, ||, and !.
+let ready = 3 >= 2;           // true
+let equal = (1 + 1) == 2;     // true
+let strict = 5 < 5;           // false
+let both = ready && !strict;  // true (true && !false)
+let either = ready || strict; // true
 
-mixed
+both && either

@@ -29,7 +29,7 @@ The library and executable share a small, direct pipeline:
 library evaluate(program)
         |
         v
-lexer -> tokens -> parser -> program AST -> evaluator -> Value result
+lexer -> tokens -> parser -> program AST -> type checker -> evaluator -> Value result
         ^
         |
 private CLI adapter <- process startup
@@ -41,24 +41,29 @@ source selection and complete UTF-8 input read
 - `src/lib.rs` owns the public library boundary and orchestration. Its primary
   public function is `evaluate(program: &str) -> Result<Value, Error>`, with
   `evaluate_with_limits(program, &Limits)` exposing the configurable input-size
-  bound. `evaluate` uses `Limits::default()`. Public types are `Value`, the
-  typed evaluation result (`Int(i64)`, `Bool(bool)`, `String(String)`; v2.0
-  produces only `Int`), `Error`, the opaque error whose `Display` preserves the
-  existing user-facing message, and `SourcePosition`, exposed through
-  `Error::position()`.
-- `src/ast.rs`, `src/lexer.rs`, `src/parser.rs`, `src/evaluator.rs`, and
-  `src/error.rs` are flat, private implementation modules. The lexer turns
-  text into position-tagged tokens; the recursive-descent parser builds
-  declarations and expressions according to precedence and stamps each AST
-  node with the source position of its first token; and the evaluator resolves
-  immutable variables and performs checked `i64` arithmetic, attaching the
+  bound. `evaluate` uses `Limits::default()`. Public types are `Value` (the
+  `Int`, `Bool`, and `String` results, printed via `Display`), `Error`, the
+  opaque error whose `Display` preserves the existing user-facing message, and
+  `SourcePosition`, exposed through `Error::position()`.
+- `src/ast.rs`, `src/lexer.rs`, `src/parser.rs`, `src/typecheck.rs`,
+  `src/evaluator.rs`, and `src/error.rs` are flat, private implementation
+  modules. The lexer turns text into position-tagged tokens (including
+  keywords, string literals with escapes, and the logical operators); the
+  recursive-descent parser builds declarations, expressions, and `if`/`else`
+  blocks according to precedence and stamps each AST node with the source
+  position of its first token; the static type checker walks the program
+  against a stack of lexical scopes and rejects ill-typed programs with a
+  positioned error; and the evaluator resolves immutable variables through the
+  same scope stack, performs checked `i64` arithmetic, concatenates strings,
+  short-circuits `&&`/`||`, and selects `if`/`else` branches, attaching the
   relevant node's position to evaluation errors.
 - Resource limits live on the parser and the library entry point. The parser
-  bounds recursive nesting (parentheses and prefix `-` chains) with a `depth`
-  counter, reporting `program too deeply nested`; the library entry points
-  enforce the byte-length input limit from `Limits` before lexing. Positions
-  are always tracked internally, but CLI output only shows them when the
-  `--positions` flag is passed, keeping the default error text stable.
+  bounds recursive nesting (parentheses, prefix `-`/`!` chains, and nested
+  `if`/`else` blocks) with a `depth` counter, reporting `program too deeply
+  nested`; the library entry points enforce the byte-length input limit from
+  `Limits` before lexing. Positions are always tracked internally, but CLI
+  output only shows them when the `--positions` flag is passed, keeping the
+  default error text stable.
 - `src/main.rs` only supplies process arguments and delegates the exit code.
 - Unit tests next to each pipeline stage cover lexical, syntax, and evaluation
   behavior. Library-facade tests cover the public API and error display.
@@ -67,9 +72,11 @@ source selection and complete UTF-8 input read
   suite for inline, file, standard-input, and REPL behavior, output, and exit
   status.
 - `tests/property_reference.rs` holds a self-contained property-based test
-  that renders generated programs back to source and requires the full
-  pipeline to agree with an independent reference evaluator over checked
-  `i64` arithmetic and ordered immutable `let` bindings.
+  that generates well-typed programs over integers, booleans, and strings,
+  renders them back to source, and requires the full pipeline to agree with an
+  independent reference evaluator over checked `i64` arithmetic, string
+  concatenation, short-circuiting logical operators, `if`/`else` selection,
+  and ordered immutable `let` bindings.
 - `tests/fuzz_smoke.rs` is a dependency-free fuzzing harness over the public
   `evaluate` entry point (random token soup, pseudo-programs, arbitrary
   UTF-8, and edge cases), with a fast batch that runs inside the ordinary
@@ -87,10 +94,9 @@ source selection and complete UTF-8 input read
   Doctests run on both toolchains (`cargo test --doc`), a `release` job
   runs the full test suite in release mode (`cargo test --release`) so the
   shipped binaries are exercised without debug assertions, and a `semver`
-  job checks the public library API with `cargo-semver-checks`; it runs with
-  `release-type: major` while the breaking v2 window is open, and will switch
-  to the v2.0.0 tag as baseline at the v2.1 release so later 2.x releases stay
-  backward compatible with the v2 contract. Runs for the same branch or pull
+  job checks the public library API with `cargo-semver-checks` against the
+  v2.0.0 tag as the backward-compatibility baseline, so later 2.x releases
+  stay compatible with the v2 contract. Runs for the same branch or pull
   request cancel the previous in-flight run, so a newer push supersedes a
   stale one.
   `.github/workflows/nightly-fuzz.yml` runs the coverage-guided `cargo-fuzz`
@@ -127,9 +133,11 @@ When adding a syntactic feature, consider each stage explicitly:
 2. Extend the lexer token set only when the spelling cannot reuse an existing
    token.
 3. Extend the parser and AST so invalid forms produce clear errors.
-4. Implement evaluation with checked arithmetic and the current declaration
-   visibility rules in mind.
-5. Add unit and CLI coverage for successful use, invalid syntax, and relevant
+4. Extend the static type checker so ill-typed forms fail before evaluation
+   with a positioned type error.
+5. Implement evaluation with checked arithmetic and the current scope and
+   value rules in mind.
+6. Add unit and CLI coverage for successful use, invalid syntax, and relevant
    error paths.
 
 Comments are handled entirely by the lexer: `//` and `/* ... */` sequences

@@ -1,0 +1,14 @@
+// if/else expressions choose between typed branches with scoped bindings.
+let temperature = 32;
+let verdict = if temperature > 30 { "hot" } else { "cold" };
+let is_hot = verdict == "hot";            // true
+
+let score = 7;
+let boosted = if score > 5 {              // blocks may declare local variables
+    let bonus = 3;
+    score + bonus                         // 10
+} else {
+    score
+};
+
+is_hot && boosted == 10
