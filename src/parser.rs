@@ -73,7 +73,10 @@ impl<'a> Parser<'a> {
         Ok(functions)
     }
 
-    fn parse_function(&mut self, existing: &[FunctionDeclaration]) -> Result<FunctionDeclaration, Error> {
+    fn parse_function(
+        &mut self,
+        existing: &[FunctionDeclaration],
+    ) -> Result<FunctionDeclaration, Error> {
         let function_position = self.peek().map(|token| token.position);
         self.advance(); // consume 'fn'
 
@@ -83,15 +86,15 @@ impl<'a> Parser<'a> {
                 ..
             }) => name.clone(),
             Some(token) => {
-                return Err(Error::at("expected a function name after 'fn'", token.position))
+                return Err(Error::at(
+                    "expected a function name after 'fn'",
+                    token.position,
+                ))
             }
             None => return Err(self.error_here("expected a function name after 'fn'")),
         };
 
-        if existing
-            .iter()
-            .any(|function| function.name == name)
-        {
+        if existing.iter().any(|function| function.name == name) {
             return Err(Error::at(
                 format!("duplicate function declaration: '{name}'"),
                 function_position.unwrap_or(SourcePosition { line: 1, column: 1 }),
@@ -109,9 +112,7 @@ impl<'a> Parser<'a> {
                 ..
             })
         ) {
-            let position = semicolon
-                .map(|token| token.position)
-                .or(function_position);
+            let position = semicolon.map(|token| token.position).or(function_position);
             return Err(Error::at(
                 format!("expected ';' after declaration of function '{name}'"),
                 position.unwrap_or(SourcePosition { line: 1, column: 1 }),
@@ -200,7 +201,11 @@ impl<'a> Parser<'a> {
 
     /// Parses a `(arg, ...)` call after an identifier callee has already been
     /// consumed. Trailing commas are not supported.
-    fn parse_call(&mut self, callee: String, position: Option<SourcePosition>) -> Result<Expression, Error> {
+    fn parse_call(
+        &mut self,
+        callee: String,
+        position: Option<SourcePosition>,
+    ) -> Result<Expression, Error> {
         self.advance(); // consume '('
 
         let mut arguments = Vec::new();
@@ -218,7 +223,9 @@ impl<'a> Parser<'a> {
             if matches!(self.peek_kind(), Some(TokenKind::Comma)) {
                 return Err(Error::at(
                     "unexpected ',' in function call",
-                    self.peek().map(|t| t.position).unwrap_or(SourcePosition { line: 1, column: 1 }),
+                    self.peek()
+                        .map(|t| t.position)
+                        .unwrap_or(SourcePosition { line: 1, column: 1 }),
                 ));
             }
 
@@ -263,7 +270,10 @@ impl<'a> Parser<'a> {
 
         if !matches!(self.peek_kind(), Some(TokenKind::LeftBrace)) {
             return match self.peek() {
-                Some(token) => Err(Error::at("expected a block for the function body", token.position)),
+                Some(token) => Err(Error::at(
+                    "expected a block for the function body",
+                    token.position,
+                )),
                 None => Err(Error::new("expected a block for the function body")),
             };
         }

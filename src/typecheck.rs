@@ -168,7 +168,11 @@ fn initial_signatures(functions: &[FunctionDeclaration]) -> Vec<Signature> {
 fn structural_checks(program: &Program) -> Result<(), Error> {
     let names: Vec<&str> = program.functions.iter().map(|f| f.name.as_str()).collect();
     for function in &program.functions {
-        check_expression_calls(&function.body.expression, &function.body.declarations, &names)?;
+        check_expression_calls(
+            &function.body.expression,
+            &function.body.declarations,
+            &names,
+        )?;
     }
     check_expression_calls(&program.expression, &program.declarations, &names)
 }
@@ -193,7 +197,10 @@ fn check_expression_shape(expression: &Expression, names: &[&str]) -> Result<(),
             position,
         } => {
             if !names.contains(&callee.as_str()) {
-                return Err(positioned(format!("undefined function: '{callee}'"), *position));
+                return Err(positioned(
+                    format!("undefined function: '{callee}'"),
+                    *position,
+                ));
             }
             for argument in arguments {
                 check_expression_shape(argument, names)?;
@@ -240,7 +247,13 @@ fn run_inference(program: &Program, signatures: &mut Vec<Signature>) -> Result<(
         for (fi, function) in program.functions.iter().enumerate() {
             let mut params = HashMap::new();
             for (pi, name) in function.parameters.iter().enumerate() {
-                params.insert(name.clone(), ParamRef { function: fi, index: pi });
+                params.insert(
+                    name.clone(),
+                    ParamRef {
+                        function: fi,
+                        index: pi,
+                    },
+                );
             }
             let mut locals = HashMap::new();
             let body_flow = check_block_flow(&function.body, &params, &mut locals, signatures)?;
@@ -254,7 +267,9 @@ fn run_inference(program: &Program, signatures: &mut Vec<Signature>) -> Result<(
         }
     }
 
-    Err(Error::new("could not infer the types of the declared functions"))
+    Err(Error::new(
+        "could not infer the types of the declared functions",
+    ))
 }
 
 /// Checks the top-level declarations and final expression. For programs without
@@ -391,7 +406,10 @@ fn check_expr_flow(
                     Lattice::Mixed => Flow::Mixed,
                 });
             }
-            Err(positioned(format!("undefined variable: '{name}'"), *position))
+            Err(positioned(
+                format!("undefined variable: '{name}'"),
+                *position,
+            ))
         }
         Expression::Call {
             callee,
@@ -453,18 +471,24 @@ fn check_expr_flow(
             require_unary(operand_flow, "!", Type::Bool, *position, signatures)?;
             Ok(Flow::Concrete(Type::Bool))
         }
-        Expression::LogicalAnd { left, right, position } => {
-            check_boolean_pair("&&", left, right, *position, params, locals, signatures)
-        }
-        Expression::LogicalOr { left, right, position } => {
-            check_boolean_pair("||", left, right, *position, params, locals, signatures)
-        }
+        Expression::LogicalAnd {
+            left,
+            right,
+            position,
+        } => check_boolean_pair("&&", left, right, *position, params, locals, signatures),
+        Expression::LogicalOr {
+            left,
+            right,
+            position,
+        } => check_boolean_pair("||", left, right, *position, params, locals, signatures),
         Expression::Binary {
             operator,
             left,
             right,
             position,
-        } => check_binary(*operator, left, right, *position, params, locals, signatures),
+        } => check_binary(
+            *operator, left, right, *position, params, locals, signatures,
+        ),
         Expression::If {
             condition,
             then_branch,
@@ -486,11 +510,14 @@ fn check_expr_flow(
 fn pin_type(flow: Flow, required: Type, signatures: &mut [Signature]) {
     match flow {
         Flow::Unknown(Where::Param(fi, pi)) => {
-            signatures[fi].parameter_types[pi] =
-                join(signatures[fi].parameter_types[pi], Lattice::Concrete(required));
+            signatures[fi].parameter_types[pi] = join(
+                signatures[fi].parameter_types[pi],
+                Lattice::Concrete(required),
+            );
         }
         Flow::Unknown(Where::Result(fi)) => {
-            signatures[fi].result_type = join(signatures[fi].result_type, Lattice::Concrete(required));
+            signatures[fi].result_type =
+                join(signatures[fi].result_type, Lattice::Concrete(required));
         }
         _ => {}
     }
@@ -878,7 +905,10 @@ mod tests {
             check_error("-true"),
             "type mismatch in '-': expected an integer, found boolean"
         );
-        assert_eq!(check_error("!5"), "type mismatch in '!': expected a boolean, found integer");
+        assert_eq!(
+            check_error("!5"),
+            "type mismatch in '!': expected a boolean, found integer"
+        );
         assert_eq!(
             check_error("!\"a\""),
             "type mismatch in '!': expected a boolean, found string"
@@ -1017,6 +1047,9 @@ mod tests {
         assert!(check_error("fn id(x) = { x }; 1").contains("cannot infer"));
         // A never-called function whose parameters are only passed through is
         // ambiguous and must be rejected rather than silently defaulted.
-        assert!(check_error("fn choose(a, b) = { if true { a } else { b } }; 1").contains("cannot infer"));
+        assert!(
+            check_error("fn choose(a, b) = { if true { a } else { b } }; 1")
+                .contains("cannot infer")
+        );
     }
 }

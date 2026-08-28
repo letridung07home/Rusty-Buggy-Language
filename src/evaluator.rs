@@ -48,7 +48,13 @@ fn evaluate_block(
     call_depth: &mut usize,
 ) -> Result<Value, Error> {
     scopes.push(HashMap::new());
-    let result = evaluate_body(&block.declarations, &block.expression, functions, scopes, call_depth);
+    let result = evaluate_body(
+        &block.declarations,
+        &block.expression,
+        functions,
+        scopes,
+        call_depth,
+    );
     scopes.pop();
     result
 }
@@ -250,7 +256,9 @@ fn evaluate_call(
 
     let mut argument_values = Vec::with_capacity(arguments.len());
     for argument in arguments {
-        argument_values.push(evaluate_expression(argument, functions, scopes, call_depth)?);
+        argument_values.push(evaluate_expression(
+            argument, functions, scopes, call_depth,
+        )?);
     }
 
     // The type checker enforces argument types, but the evaluator defends the
@@ -842,17 +850,19 @@ mod tests {
 
     #[test]
     fn evaluates_simple_function_calls() {
+        assert_eq!(evaluate_source("fn sq(x) = { x * x }; sq(5)"), Ok(int(25)));
         assert_eq!(
-            evaluate_source("fn sq(x) = { x * x }; sq(5)"),
-            Ok(int(25))
+            evaluate_source("fn inc(x) = { x + 1 }; inc(41)"),
+            Ok(int(42))
         );
-        assert_eq!(evaluate_source("fn inc(x) = { x + 1 }; inc(41)"), Ok(int(42)));
     }
 
     #[test]
     fn evaluates_multiple_parameters_and_blocks_with_locals() {
         assert_eq!(
-            evaluate_source("fn max(a, b) = { let big = if a > b { a } else { b }; big }; max(3, 7)"),
+            evaluate_source(
+                "fn max(a, b) = { let big = if a > b { a } else { b }; big }; max(3, 7)"
+            ),
             Ok(int(7))
         );
         assert_eq!(
@@ -864,7 +874,9 @@ mod tests {
     #[test]
     fn functions_can_refer_to_other_functions() {
         assert_eq!(
-            evaluate_source("fn double(x) = { x + x }; fn quad(x) = { double(double(x)) }; quad(3)"),
+            evaluate_source(
+                "fn double(x) = { x + x }; fn quad(x) = { double(double(x)) }; quad(3)"
+            ),
             Ok(int(12))
         );
     }
@@ -876,7 +888,9 @@ mod tests {
             Ok(int(120))
         );
         assert_eq!(
-            evaluate_source("fn fib(n) = { if n <= 1 { n } else { fib(n - 1) + fib(n - 2) } }; fib(10)"),
+            evaluate_source(
+                "fn fib(n) = { if n <= 1 { n } else { fib(n - 1) + fib(n - 2) } }; fib(10)"
+            ),
             Ok(int(55))
         );
     }
@@ -914,4 +928,4 @@ mod tests {
         let source = "fn count(n) = { if n == 0 { n } else { count(n - 1) } }; count(2000)";
         assert_eq!(error_message(source), "call depth limit exceeded");
     }
-}
+}

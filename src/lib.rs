@@ -290,10 +290,7 @@ mod tests {
 
     #[test]
     fn evaluates_function_declarations_and_recursive_calls() {
-        assert_eq!(
-            evaluate("fn sq(x) = { x * x }; sq(12)"),
-            Ok(int(144))
-        );
+        assert_eq!(evaluate("fn sq(x) = { x * x }; sq(12)"), Ok(int(144)));
         assert_eq!(
             evaluate("fn fact(n) = { if n <= 1 { 1 } else { n * fact(n - 1) } }; fact(6)"),
             Ok(int(720))
