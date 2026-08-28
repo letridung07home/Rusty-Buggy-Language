@@ -47,7 +47,10 @@ fn evaluate_expression(
                     return Ok(value.clone());
                 }
             }
-            Err(positioned_error(format!("undefined variable: '{name}'"), *position))
+            Err(positioned_error(
+                format!("undefined variable: '{name}'"),
+                *position,
+            ))
         }
         Expression::UnaryNegation { operand, position } => {
             // The magnitude 2^63 has no unnegated representation; a literal of
@@ -92,7 +95,11 @@ fn evaluate_expression(
             let right_value = evaluate_expression(right, scopes)?;
             evaluate_binary(*operator, left_value, right_value, *position)
         }
-        Expression::LogicalAnd { left, right, position } => {
+        Expression::LogicalAnd {
+            left,
+            right,
+            position,
+        } => {
             let left_value = evaluate_expression(left, scopes)?;
             let left_bool = match left_value {
                 Value::Bool(value) => value,
@@ -121,7 +128,11 @@ fn evaluate_expression(
                 )),
             }
         }
-        Expression::LogicalOr { left, right, position } => {
+        Expression::LogicalOr {
+            left,
+            right,
+            position,
+        } => {
             let left_value = evaluate_expression(left, scopes)?;
             let left_bool = match left_value {
                 Value::Bool(value) => value,
@@ -284,9 +295,9 @@ fn evaluate_binary(
                     if b == 0 {
                         Err(positioned_error("division by zero", position))
                     } else {
-                        a.checked_rem(b).map(Value::Int).ok_or_else(|| {
-                            positioned_error("integer remainder overflow", position)
-                        })
+                        a.checked_rem(b)
+                            .map(Value::Int)
+                            .ok_or_else(|| positioned_error("integer remainder overflow", position))
                     }
                 }
                 BinaryOperator::LessThan => Ok(Value::Bool(a < b)),
@@ -403,18 +414,9 @@ mod tests {
         assert_eq!(evaluate_source("true || false"), Ok(boolean(true)));
         assert_eq!(evaluate_source("false || false"), Ok(boolean(false)));
         // && binds tighter than ||.
-        assert_eq!(
-            evaluate_source("true || false && false"),
-            Ok(boolean(true))
-        );
-        assert_eq!(
-            evaluate_source("1 < 2 && 3 < 4"),
-            Ok(boolean(true))
-        );
-        assert_eq!(
-            evaluate_source("1 < 2 && 4 < 3"),
-            Ok(boolean(false))
-        );
+        assert_eq!(evaluate_source("true || false && false"), Ok(boolean(true)));
+        assert_eq!(evaluate_source("1 < 2 && 3 < 4"), Ok(boolean(true)));
+        assert_eq!(evaluate_source("1 < 2 && 4 < 3"), Ok(boolean(false)));
     }
 
     #[test]
@@ -465,7 +467,10 @@ mod tests {
         assert_eq!(evaluate_source("\"a\" == \"a\""), Ok(boolean(true)));
         assert_eq!(evaluate_source("\"a\" == \"b\""), Ok(boolean(false)));
         assert_eq!(evaluate_source("\"a\" != \"b\""), Ok(boolean(true)));
-        assert_eq!(evaluate_source("let s = \"hi\"; s == \"hi\""), Ok(boolean(true)));
+        assert_eq!(
+            evaluate_source("let s = \"hi\"; s == \"hi\""),
+            Ok(boolean(true))
+        );
         assert_eq!(evaluate_source("true == true"), Ok(boolean(true)));
         assert_eq!(evaluate_source("true != false"), Ok(boolean(true)));
     }
@@ -531,7 +536,9 @@ mod tests {
     #[test]
     fn reports_type_errors_before_evaluation() {
         assert_eq!(
-            evaluate_source("8 / (3 - 3) + true").unwrap_err().to_string(),
+            evaluate_source("8 / (3 - 3) + true")
+                .unwrap_err()
+                .to_string(),
             "type mismatch in '+': expected two integers or two strings, found integer and boolean"
         );
     }
@@ -597,7 +604,10 @@ mod tests {
 
     #[test]
     fn evaluates_modulo_in_variable_declarations() {
-        assert_eq!(evaluate_source("let a = 10; let b = a % 3; b + 1"), Ok(int(2)));
+        assert_eq!(
+            evaluate_source("let a = 10; let b = a % 3; b + 1"),
+            Ok(int(2))
+        );
     }
 
     #[test]
@@ -687,9 +697,7 @@ mod tests {
             Ok(int(1))
         );
         assert_eq!(
-            evaluate_source(
-                "let s = \"outer\"; if true { let s = \"inner\"; s } else { s }"
-            ),
+            evaluate_source("let s = \"outer\"; if true { let s = \"inner\"; s } else { s }"),
             Ok(string("inner"))
         );
         // The shadowed declaration does not escape the block: the final `+ x`

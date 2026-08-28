@@ -486,7 +486,10 @@ mod tests {
 
     #[test]
     fn tokenizes_braces() {
-        assert_eq!(kinds("{ }"), vec![TokenKind::LeftBrace, TokenKind::RightBrace]);
+        assert_eq!(
+            kinds("{ }"),
+            vec![TokenKind::LeftBrace, TokenKind::RightBrace]
+        );
     }
 
     #[test]
@@ -523,10 +526,7 @@ mod tests {
     fn string_literals_keep_their_opening_position() {
         let tokens = Lexer::new("let s = \"hi\"; s").tokenize().unwrap();
 
-        assert_eq!(
-            tokens[3].position,
-            SourcePosition { line: 1, column: 9 }
-        );
+        assert_eq!(tokens[3].position, SourcePosition { line: 1, column: 9 });
     }
 
     #[test]

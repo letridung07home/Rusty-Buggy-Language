@@ -191,7 +191,10 @@ mod tests {
     #[test]
     fn comments_are_stripped_before_evaluation() {
         assert_eq!(evaluate("1 /* part */ + 2 // note"), Ok(int(3)));
-        assert_eq!(evaluate("let rate = 20; // per hour\nrate * 5"), Ok(int(100)));
+        assert_eq!(
+            evaluate("let rate = 20; // per hour\nrate * 5"),
+            Ok(int(100))
+        );
         assert_eq!(evaluate("let a = 1; /* multi\nline */ a + 1"), Ok(int(2)));
     }
 

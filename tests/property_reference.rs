@@ -278,9 +278,7 @@ fn reference_eval(expr: &Expr, values: &HashMap<String, RefValue>) -> Option<Ref
 
             match op {
                 BinaryOp::Add => match (left, right) {
-                    (RefValue::Int(a), RefValue::Int(b)) => {
-                        a.checked_add(b).map(RefValue::Int)
-                    }
+                    (RefValue::Int(a), RefValue::Int(b)) => a.checked_add(b).map(RefValue::Int),
                     (RefValue::Str(a), RefValue::Str(b)) => Some(RefValue::Str(a + &b)),
                     _ => None,
                 },

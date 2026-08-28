@@ -107,12 +107,16 @@ fn check_expression(
             let right_type = check_expression(right, scopes)?;
             check_binary(*operator, left_type, right_type, *position)
         }
-        Expression::LogicalAnd { left, right, position } => {
-            check_logical("&&", left, right, *position, scopes)
-        }
-        Expression::LogicalOr { left, right, position } => {
-            check_logical("||", left, right, *position, scopes)
-        }
+        Expression::LogicalAnd {
+            left,
+            right,
+            position,
+        } => check_logical("&&", left, right, *position, scopes),
+        Expression::LogicalOr {
+            left,
+            right,
+            position,
+        } => check_logical("||", left, right, *position, scopes),
         Expression::If {
             condition,
             then_branch,

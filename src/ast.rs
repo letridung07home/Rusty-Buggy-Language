@@ -1,6 +1,6 @@
 use crate::error::SourcePosition;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum BinaryOperator {
     Add,
     Subtract,

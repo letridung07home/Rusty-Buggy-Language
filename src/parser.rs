@@ -279,6 +279,18 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_primary(&mut self) -> Result<Expression, Error> {
+        // Handle `if` before the advancing match: the If arm calls a
+        // `&mut self` method, which is not allowed while the match
+        // scrutinee's borrow of `self` is still alive.
+        if matches!(self.peek_kind(), Some(TokenKind::If)) {
+            let position = self
+                .peek()
+                .map(|token| token.position)
+                .expect("the 'if' token was peeked above");
+            self.advance();
+            return self.parse_if_expression(position);
+        }
+
         match self.advance() {
             Some(Token {
                 kind: TokenKind::Integer(value),
@@ -329,10 +341,6 @@ impl<'a> Parser<'a> {
                     None => Err(self.error_here("unmatched '('")),
                 }
             }
-            Some(Token {
-                kind: TokenKind::If,
-                position,
-            }) => self.parse_if_expression(*position),
             Some(token) => match &token.kind {
                 TokenKind::RightParen => Err(Error::at("unexpected ')'", token.position)),
                 TokenKind::RightBrace => Err(Error::at("unexpected '}'", token.position)),
@@ -352,7 +360,10 @@ impl<'a> Parser<'a> {
                 ..
             }) => {}
             Some(token) => {
-                return Err(Error::at("expected 'else' after the if branch", token.position))
+                return Err(Error::at(
+                    "expected 'else' after the if branch",
+                    token.position,
+                ))
             }
             None => return Err(self.error_here("expected 'else' after the if branch")),
         }
@@ -685,7 +696,10 @@ mod tests {
             parse_error("if true { 1 } else 2"),
             "expected a block after 'else'"
         );
-        assert_eq!(parse_error("if true"), "expected a block after if condition");
+        assert_eq!(
+            parse_error("if true"),
+            "expected a block after if condition"
+        );
         assert_eq!(parse_error("if { 1 } else { 2 }"), "expected an expression");
     }
 
