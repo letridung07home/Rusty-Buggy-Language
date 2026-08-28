@@ -2,11 +2,26 @@ use std::collections::HashMap;
 
 use crate::ast::{BinaryOperator, Block, Declaration, Expression, Program};
 use crate::error::{Error, SourcePosition};
+use crate::typecheck::ResolvedFunctions;
 use crate::Value;
 
-pub(crate) fn evaluate(program: &Program) -> Result<Value, Error> {
+/// The maximum depth of nested function calls the evaluator allows before
+/// reporting a clear error. Kept low enough that even a debug build's default
+/// thread stack (and the MSRV test harness) cannot be overflowed by a few
+/// hundred nested calls, mirroring the parser's nesting-depth limit and the
+/// language's "clear error instead of crash" hardening posture.
+const MAX_CALL_DEPTH: usize = 128;
+
+pub(crate) fn evaluate(program: &Program, functions: &ResolvedFunctions) -> Result<Value, Error> {
     let mut scopes = vec![HashMap::new()];
-    evaluate_body(&program.declarations, &program.expression, &mut scopes)
+    let mut call_depth = 0_usize;
+    evaluate_body(
+        &program.declarations,
+        &program.expression,
+        functions,
+        &mut scopes,
+        &mut call_depth,
+    )
 }
 
 /// Evaluates declarations into the current innermost scope and then the final
@@ -14,26 +29,41 @@ pub(crate) fn evaluate(program: &Program) -> Result<Value, Error> {
 fn evaluate_body(
     declarations: &[Declaration],
     expression: &Expression,
+    functions: &ResolvedFunctions,
     scopes: &mut Vec<HashMap<String, Value>>,
+    call_depth: &mut usize,
 ) -> Result<Value, Error> {
     for declaration in declarations {
-        let value = evaluate_expression(&declaration.initializer, scopes)?;
+        let value = evaluate_expression(&declaration.initializer, functions, scopes, call_depth)?;
         let current = scopes.last_mut().expect("the scope stack is never empty");
         current.insert(declaration.name.clone(), value);
     }
-    evaluate_expression(expression, scopes)
+    evaluate_expression(expression, functions, scopes, call_depth)
 }
 
-fn evaluate_block(block: &Block, scopes: &mut Vec<HashMap<String, Value>>) -> Result<Value, Error> {
+fn evaluate_block(
+    block: &Block,
+    functions: &ResolvedFunctions,
+    scopes: &mut Vec<HashMap<String, Value>>,
+    call_depth: &mut usize,
+) -> Result<Value, Error> {
     scopes.push(HashMap::new());
-    let result = evaluate_body(&block.declarations, &block.expression, scopes);
+    let result = evaluate_body(
+        &block.declarations,
+        &block.expression,
+        functions,
+        scopes,
+        call_depth,
+    );
     scopes.pop();
     result
 }
 
 fn evaluate_expression(
     expression: &Expression,
+    functions: &ResolvedFunctions,
     scopes: &mut Vec<HashMap<String, Value>>,
+    call_depth: &mut usize,
 ) -> Result<Value, Error> {
     match expression {
         Expression::Literal { value, position } => i64::try_from(*value)
@@ -52,6 +82,11 @@ fn evaluate_expression(
                 *position,
             ))
         }
+        Expression::Call {
+            callee,
+            arguments,
+            position,
+        } => evaluate_call(callee, arguments, *position, functions, scopes, call_depth),
         Expression::UnaryNegation { operand, position } => {
             // The magnitude 2^63 has no unnegated representation; a literal of
             // that magnitude is only valid under an immediately applied `-`.
@@ -61,7 +96,7 @@ fn evaluate_expression(
                 }
             }
 
-            match evaluate_expression(operand, scopes)? {
+            match evaluate_expression(operand, functions, scopes, call_depth)? {
                 Value::Int(value) => value
                     .checked_neg()
                     .map(Value::Int)
@@ -75,24 +110,26 @@ fn evaluate_expression(
                 )),
             }
         }
-        Expression::UnaryNot { operand, position } => match evaluate_expression(operand, scopes)? {
-            Value::Bool(value) => Ok(Value::Bool(!value)),
-            other => Err(positioned_error(
-                format!(
-                    "type mismatch in '!': expected a boolean, found {}",
-                    value_type_name(&other)
-                ),
-                *position,
-            )),
-        },
+        Expression::UnaryNot { operand, position } => {
+            match evaluate_expression(operand, functions, scopes, call_depth)? {
+                Value::Bool(value) => Ok(Value::Bool(!value)),
+                other => Err(positioned_error(
+                    format!(
+                        "type mismatch in '!': expected a boolean, found {}",
+                        value_type_name(&other)
+                    ),
+                    *position,
+                )),
+            }
+        }
         Expression::Binary {
             operator,
             left,
             right,
             position,
         } => {
-            let left_value = evaluate_expression(left, scopes)?;
-            let right_value = evaluate_expression(right, scopes)?;
+            let left_value = evaluate_expression(left, functions, scopes, call_depth)?;
+            let right_value = evaluate_expression(right, functions, scopes, call_depth)?;
             evaluate_binary(*operator, left_value, right_value, *position)
         }
         Expression::LogicalAnd {
@@ -100,7 +137,7 @@ fn evaluate_expression(
             right,
             position,
         } => {
-            let left_value = evaluate_expression(left, scopes)?;
+            let left_value = evaluate_expression(left, functions, scopes, call_depth)?;
             let left_bool = match left_value {
                 Value::Bool(value) => value,
                 other => {
@@ -117,7 +154,7 @@ fn evaluate_expression(
                 // Short-circuit: the right operand must not be evaluated.
                 return Ok(Value::Bool(false));
             }
-            match evaluate_expression(right, scopes)? {
+            match evaluate_expression(right, functions, scopes, call_depth)? {
                 Value::Bool(value) => Ok(Value::Bool(value)),
                 other => Err(positioned_error(
                     format!(
@@ -133,7 +170,7 @@ fn evaluate_expression(
             right,
             position,
         } => {
-            let left_value = evaluate_expression(left, scopes)?;
+            let left_value = evaluate_expression(left, functions, scopes, call_depth)?;
             let left_bool = match left_value {
                 Value::Bool(value) => value,
                 other => {
@@ -150,7 +187,7 @@ fn evaluate_expression(
                 // Short-circuit: the right operand must not be evaluated.
                 return Ok(Value::Bool(true));
             }
-            match evaluate_expression(right, scopes)? {
+            match evaluate_expression(right, functions, scopes, call_depth)? {
                 Value::Bool(value) => Ok(Value::Bool(value)),
                 other => Err(positioned_error(
                     format!(
@@ -167,7 +204,7 @@ fn evaluate_expression(
             else_branch,
             position,
         } => {
-            let condition_value = evaluate_expression(condition, scopes)?;
+            let condition_value = evaluate_expression(condition, functions, scopes, call_depth)?;
             let condition_bool = match condition_value {
                 Value::Bool(value) => value,
                 other => {
@@ -182,11 +219,95 @@ fn evaluate_expression(
             };
 
             if condition_bool {
-                evaluate_block(then_branch, scopes)
+                evaluate_block(then_branch, functions, scopes, call_depth)
             } else {
-                evaluate_block(else_branch, scopes)
+                evaluate_block(else_branch, functions, scopes, call_depth)
             }
         }
+    }
+}
+
+/// Evaluates a function call: resolves the callee, evaluates the arguments,
+/// binds the parameters into a fresh scope, and evaluates the body. Recursion is
+/// natural because each call looks its callee up again in the environment. The
+/// call depth is guarded so runaway recursion reports a clear error.
+fn evaluate_call(
+    callee: &str,
+    arguments: &[Expression],
+    position: Option<SourcePosition>,
+    functions: &ResolvedFunctions,
+    scopes: &mut Vec<HashMap<String, Value>>,
+    call_depth: &mut usize,
+) -> Result<Value, Error> {
+    let function = functions
+        .get(callee)
+        .ok_or_else(|| positioned_error(format!("undefined function: '{callee}'"), position))?;
+
+    if arguments.len() != function.parameters.len() {
+        return Err(positioned_error(
+            format!(
+                "wrong number of arguments for function '{callee}': expected {}, found {}",
+                function.parameters.len(),
+                arguments.len()
+            ),
+            position,
+        ));
+    }
+
+    let mut argument_values = Vec::with_capacity(arguments.len());
+    for argument in arguments {
+        argument_values.push(evaluate_expression(
+            argument, functions, scopes, call_depth,
+        )?);
+    }
+
+    // The type checker enforces argument types, but the evaluator defends the
+    // same invariant in case a fuzz target drives it without type-checking.
+    for (index, value) in argument_values.iter().enumerate() {
+        let expected = function.parameter_types[index];
+        if value_type_of(value) != expected {
+            return Err(positioned_error(
+                format!(
+                    "type mismatch in call to '{callee}': expected an argument of type {}, found {}",
+                    expected.name(),
+                    value_type_name(value)
+                ),
+                position,
+            ));
+        }
+    }
+
+    *call_depth += 1;
+    if *call_depth > MAX_CALL_DEPTH {
+        *call_depth -= 1;
+        return Err(positioned_error("call depth limit exceeded", position));
+    }
+
+    scopes.push(HashMap::new());
+    {
+        let current = scopes.last_mut().expect("the scope stack is never empty");
+        for (name, value) in function.parameters.iter().zip(argument_values.iter()) {
+            current.insert(name.clone(), value.clone());
+        }
+    }
+    let result = evaluate_body(
+        &function.body.declarations,
+        &function.body.expression,
+        functions,
+        scopes,
+        call_depth,
+    );
+    scopes.pop();
+    *call_depth -= 1;
+
+    result
+}
+
+fn value_type_of(value: &Value) -> crate::ast::Type {
+    match value {
+        Value::Int(_) => crate::ast::Type::Int,
+        Value::Bool(_) => crate::ast::Type::Bool,
+        Value::String(_) => crate::ast::Type::String,
     }
 }
 
@@ -337,8 +458,8 @@ mod tests {
     fn evaluate_source(input: &str) -> Result<Value, Error> {
         let tokens = Lexer::new(input).tokenize()?;
         let program = Parser::new(&tokens).parse()?;
-        typecheck::check(&program)?;
-        evaluate(&program)
+        let functions = typecheck::resolve(&program)?;
+        evaluate(&program, &functions)
     }
 
     fn int(value: i64) -> Value {
@@ -553,6 +674,7 @@ mod tests {
             let tokens = Lexer::new(source).tokenize().unwrap();
             Parser::new(&tokens).parse().unwrap()
         };
+        let empty = crate::typecheck::ResolvedFunctions::default();
 
         for source in [
             "1 + true",
@@ -578,7 +700,7 @@ mod tests {
             "if 1 { 2 } else { 3 }",
         ] {
             let parsed = parse_only(source);
-            let error = evaluate(&parsed).unwrap_err();
+            let error = evaluate(&parsed, &empty).unwrap_err();
             let message = error.to_string();
             assert!(
                 message.starts_with("type mismatch") || message.starts_with("if condition"),
@@ -722,5 +844,88 @@ mod tests {
             ),
             Ok(string("hot"))
         );
+    }
+
+    // --- Functions ---
+
+    #[test]
+    fn evaluates_simple_function_calls() {
+        assert_eq!(evaluate_source("fn sq(x) = { x * x }; sq(5)"), Ok(int(25)));
+        assert_eq!(
+            evaluate_source("fn inc(x) = { x + 1 }; inc(41)"),
+            Ok(int(42))
+        );
+    }
+
+    #[test]
+    fn evaluates_multiple_parameters_and_blocks_with_locals() {
+        assert_eq!(
+            evaluate_source(
+                "fn max(a, b) = { let big = if a > b { a } else { b }; big }; max(3, 7)"
+            ),
+            Ok(int(7))
+        );
+        assert_eq!(
+            evaluate_source("fn hypo(a) = { let ds = a * 2; ds + 1 }; hypo(10)"),
+            Ok(int(21))
+        );
+    }
+
+    #[test]
+    fn functions_can_refer_to_other_functions() {
+        assert_eq!(
+            evaluate_source(
+                "fn double(x) = { x + x }; fn quad(x) = { double(double(x)) }; quad(3)"
+            ),
+            Ok(int(12))
+        );
+    }
+
+    #[test]
+    fn evaluates_recursion() {
+        assert_eq!(
+            evaluate_source("fn fact(n) = { if n <= 1 { 1 } else { n * fact(n - 1) } }; fact(5)"),
+            Ok(int(120))
+        );
+        assert_eq!(
+            evaluate_source(
+                "fn fib(n) = { if n <= 1 { n } else { fib(n - 1) + fib(n - 2) } }; fib(10)"
+            ),
+            Ok(int(55))
+        );
+    }
+
+    #[test]
+    fn evaluates_mutual_recursion() {
+        assert_eq!(
+            evaluate_source(
+                "fn even(n) = { if n == 0 { true } else { odd(n - 1) } }; fn odd(n) = { if n == 0 { false } else { even(n - 1) } }; even(10)"
+            ),
+            Ok(boolean(true))
+        );
+        assert_eq!(
+            evaluate_source(
+                "fn even(n) = { if n == 0 { true } else { odd(n - 1) } }; fn odd(n) = { if n == 0 { false } else { even(n - 1) } }; odd(10)"
+            ),
+            Ok(boolean(false))
+        );
+    }
+
+    #[test]
+    fn parameters_are_scoped_to_the_body() {
+        // A parameter must not leak into the top-level final expression.
+        assert_eq!(
+            error_message("fn f(x) = { x + 1 }; f(1) + x"),
+            "undefined variable: 'x'"
+        );
+    }
+
+    #[test]
+    fn infinite_recursion_reports_a_clear_error() {
+        // A counting function that recurses deeper than the call-depth guard,
+        // so the guard (not the terminal case) must fire. The program still
+        // type-checks: `count(n)` is an integer.
+        let source = "fn count(n) = { if n == 0 { n } else { count(n - 1) } }; count(2000)";
+        assert_eq!(error_message(source), "call depth limit exceeded");
     }
 }

@@ -2,8 +2,9 @@
 
 Rusty Buggy Language is a small expression language evaluated by the
 `rusty-buggy-language` command-line program. A program consists of zero or more
-immutable variable declarations followed by exactly one final expression.
-Values are signed 64-bit integers, booleans, and UTF-8 strings.
+function declarations, zero or more immutable variable declarations, and
+exactly one final expression. Values are signed 64-bit integers, booleans, and
+UTF-8 strings.
 
 ## Running a program
 
@@ -74,7 +75,9 @@ evaluation. Block comments do not nest. There are no alternate literal
 formats.
 
 ```text
-program        ::= declaration* expression
+program        ::= function* declaration* expression
+function       ::= "fn" identifier "(" identifier? ("," identifier)* ")"
+                   "=" block ";"
 declaration    ::= "let" identifier "=" expression ";"
 block          ::= "{" declaration* expression "}"
 expression     ::= logical_or
@@ -86,6 +89,7 @@ additive       ::= multiplicative (("+" | "-") multiplicative)*
 multiplicative ::= unary (("*" | "/" | "%") unary)*
 unary          ::= ("-" | "!") unary | primary
 primary        ::= integer | string | "true" | "false" | identifier
+                 | identifier "(" expression? ("," expression)* ")"
                  | "(" expression ")" | if_expression
 if_expression  ::= "if" expression block "else" block
 integer        ::= digit+
@@ -101,8 +105,8 @@ quotes; the escapes `\n`, `\t`, `\\`, and `\"` are decoded by the lexer, any
 other escape sequence is an error, and a literal containing a raw newline or
 running past the end of the input is unterminated. Identifiers use ASCII
 letters, digits, and underscores, but cannot start with a digit. The exact
-identifiers `let`, `true`, `false`, `if`, and `else` are reserved keywords and
-cannot be used as variable names.
+identifiers `let`, `fn`, `true`, `false`, `if`, and `else` are reserved
+keywords and cannot be used as variable or function names.
 
 ## Values
 
@@ -179,6 +183,56 @@ outside it. A block may shadow a name declared in an enclosing scope; within a
 single scope (the program top level or one block), a name cannot be declared
 twice. Names resolve to the innermost enclosing declaration.
 
+## Functions
+
+A function declaration binds a name to parameters and a body:
+
+```text
+fn name(param, ...) = { declaration* expression };
+```
+
+For example:
+
+```text
+fn square(x) = { x * x };
+fn max(a, b) = { if a > b { a } else { b } };
+let side = max(3, 7);        // 7
+let area = square(side);     // 49
+area
+```
+
+Function declarations appear before the `let` declarations and the final
+expression. A function is visible to every `let` declaration, to the final
+expression, and to recursive calls from its own body (and from other functions'
+bodies). Parameters are immutable and scoped strictly to the body; the body is a
+block like an `if`/`else` branch, so it may declare local variables that do not
+leak out. A name cannot be declared as a function more than once, and a
+parameter list cannot repeat a name.
+
+A call is an identifier followed by `(arg, ...)`:
+
+```text
+fn factorial(n) = { if n <= 1 { 1 } else { n * factorial(n - 1) } };
+factorial(6)     // 720
+```
+
+### Type inference
+
+Parameters and results are given no declared types. Before evaluation, the
+static type checker infers every function's parameter and result types by
+fixed-point iteration over the three-value type lattice, combining the demands
+of the function body with those of every call site (including recursive and
+top-level calls). A type that no body or call site settles to a concrete value
+is reported as an inference failure (`cannot infer`); the language never
+silently defaults an ambiguous parameter or result.
+
+### Call-depth guard
+
+Recursion is not bounded by the input size in general, so the evaluator rejects
+programs that nest calls deeper than 128 levels with `call depth limit
+exceeded`. Deep but terminating recursion (for example `factorial(120)`) is
+fine; runaway recursion reports a clear error instead of overflowing the stack.
+
 ## Declarations and evaluation
 
 Declarations are evaluated from left to right and bind an immutable value:
@@ -208,6 +262,9 @@ ill-typed programs with a positioned error. The type rules are:
 - An `if` condition must be a boolean, and both `if` branches must have the
   same type.
 - References to undeclared variables are errors.
+- Every call resolves to a declared function with the right number of
+  arguments; function parameter and result types are inferred by fixed-point
+  iteration over the three-type lattice and must agree with every call site.
 
 Type-error messages name the offending operator, the expected operand types,
 and the types found, for example
@@ -270,14 +327,19 @@ standard error, prints no result, and exits unsuccessfully. Errors include:
   literal;
 - integer literals outside the supported range;
 - undefined or forward-referenced variables and duplicate declarations;
+- undefined functions, wrong argument counts, and mismatched argument types
+  at call sites;
+- function parameters or results whose types cannot be inferred from any body
+  or call site;
 - type errors such as mixing operands of different types, a non-boolean `if`
   condition, or `if` branches of different types;
 - arithmetic overflow, including negating the minimum integer, dividing it
   by `-1`, or computing `-9223372036854775808 % -1`;
 - division by zero and modulo by zero;
-- a source program longer than the configured input limit; and
+- a source program longer than the configured input limit;
 - expressions or prefix `-`/`!` chains nested more deeply than the nesting
-  limit.
+  limit; and
+- function calls nested more deeply than the call-depth limit.
 
 When `--positions` is supplied, the CLI appends ` at line L, column C` to the
 error so the failure can be located in the source.

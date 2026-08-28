@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-08-28
+
+### Added
+
+- Added function declarations `fn name(param, ...) = expression;` that later
+  declarations and the final expression can call; bodies may be blocks so a
+  function can declare its own `let` bindings. Parameters are immutable and
+  scoped to the body, a function may call any earlier or later function,
+  including itself (recursion) or another function that calls it back
+  (mutual recursion).
+- Added monomorphic type inference for functions, computed by fixed-point
+  iteration over the small three-type lattice (`integer`, `boolean`,
+  `string`): parameter and result types are inferred from each body and
+  from every call site (including recursive and top-level calls) until
+  they stabilize, so no explicit type annotations are needed.
+- The type checker now reports positioned errors for calling an undefined
+  function, passing the wrong number of arguments, and a call-site argument
+  that does not match the inferred parameter type.
+- Added `examples/functions.rbl` and `examples/recursion.rbl`, plus
+  language-reference and tutorial sections covering declarations, calls,
+  parameter scoping, and recursion.
+- Added a dependency-free property-based test (`tests/property_functions.rs`)
+  that checks generated `fn` programs (with an acyclic call graph) against an
+  independent reference evaluator, plus fixed self- and mutual-recursion
+  cases. Evaluation still bails out with a clear `call depth limit exceeded`
+  error instead of overflowing the stack.
+
 ## [2.1.0] - 2026-08-28
 
 ### Added

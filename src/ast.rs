@@ -15,7 +15,7 @@ pub(crate) enum BinaryOperator {
     NotEqual,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Expression {
     Literal {
         value: u64,
@@ -31,6 +31,11 @@ pub(crate) enum Expression {
     },
     Variable {
         name: String,
+        position: Option<SourcePosition>,
+    },
+    Call {
+        callee: String,
+        arguments: Vec<Expression>,
         position: Option<SourcePosition>,
     },
     UnaryNegation {
@@ -73,6 +78,7 @@ impl Expression {
             | Expression::StringLiteral { position, .. }
             | Expression::BoolLiteral { position, .. }
             | Expression::Variable { position, .. }
+            | Expression::Call { position, .. }
             | Expression::UnaryNegation { position, .. }
             | Expression::UnaryNot { position, .. }
             | Expression::Binary { position, .. }
@@ -83,7 +89,7 @@ impl Expression {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Declaration {
     pub(crate) name: String,
     pub(crate) initializer: Expression,
@@ -91,15 +97,60 @@ pub(crate) struct Declaration {
 }
 
 /// A `{ declaration* expression }` block, used as the branch of an `if`/`else`
-/// expression. Declarations inside a block are scoped to that block.
-#[derive(Debug, PartialEq)]
+/// expression and as a function body. Declarations inside a block are scoped
+/// to that block.
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Block {
     pub(crate) declarations: Vec<Declaration>,
     pub(crate) expression: Expression,
 }
 
+/// A `fn name(param, ...) = <body>;` declaration. Parameters are immutable and
+/// scoped to the body; the body is a block (`{ declaration* expression }`).
+/// Functions are visible to later declarations, the final expression, and to
+/// recursive calls from their own body.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct FunctionDeclaration {
+    pub(crate) name: String,
+    pub(crate) parameters: Vec<String>,
+    pub(crate) body: Block,
+    pub(crate) position: Option<SourcePosition>,
+}
+
+/// A resolved function binding: the named declaration plus the resolved
+/// parameter types and result type from monomorphic inference. Shared between
+/// the type checker and the evaluator.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Function {
+    pub(crate) name: String,
+    pub(crate) parameters: Vec<String>,
+    pub(crate) parameter_types: Vec<Type>,
+    pub(crate) result_type: Type,
+    pub(crate) body: Block,
+}
+
 #[derive(Debug, PartialEq)]
 pub(crate) struct Program {
+    pub(crate) functions: Vec<FunctionDeclaration>,
     pub(crate) declarations: Vec<Declaration>,
     pub(crate) expression: Expression,
+}
+
+/// The three value types of the language, used both by the static type checker
+/// and as resolved function signatures.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Type {
+    Int,
+    Bool,
+    String,
+}
+
+impl Type {
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Type::Int => "integer",
+            Type::Bool => "boolean",
+            Type::String => "string",
+        }
+    }
 }

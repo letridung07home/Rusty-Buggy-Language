@@ -1,4 +1,4 @@
-use crate::ast::{BinaryOperator, Block, Declaration, Expression, Program};
+use crate::ast::{BinaryOperator, Block, Declaration, Expression, FunctionDeclaration, Program};
 use crate::error::{Error, SourcePosition};
 use crate::lexer::{Token, TokenKind};
 
@@ -26,6 +26,7 @@ impl<'a> Parser<'a> {
     }
 
     pub(crate) fn parse(mut self) -> Result<Program, Error> {
+        let functions = self.parse_functions()?;
         let declarations = self.parse_declarations()?;
 
         if self.tokens.is_empty() || self.peek().is_none() {
@@ -51,9 +52,232 @@ impl<'a> Parser<'a> {
         }
 
         Ok(Program {
+            functions,
             declarations,
             expression,
         })
+    }
+
+    /// Parses zero or more `fn name(param, ...) = <body>;` declarations that
+    /// precede the `let` declarations and final expression. Every function is
+    /// bound before any body or call is parsed so functions are visible to all
+    /// declarations, the final expression, and recursive calls from their own
+    /// bodies.
+    fn parse_functions(&mut self) -> Result<Vec<FunctionDeclaration>, Error> {
+        let mut functions = Vec::new();
+
+        while matches!(self.peek_kind(), Some(TokenKind::Fn)) {
+            functions.push(self.parse_function(&functions)?);
+        }
+
+        Ok(functions)
+    }
+
+    fn parse_function(
+        &mut self,
+        existing: &[FunctionDeclaration],
+    ) -> Result<FunctionDeclaration, Error> {
+        let function_position = self.peek().map(|token| token.position);
+        self.advance(); // consume 'fn'
+
+        let name = match self.advance() {
+            Some(Token {
+                kind: TokenKind::Identifier(name),
+                ..
+            }) => name.clone(),
+            Some(token) => {
+                return Err(Error::at(
+                    "expected a function name after 'fn'",
+                    token.position,
+                ))
+            }
+            None => return Err(self.error_here("expected a function name after 'fn'")),
+        };
+
+        if existing.iter().any(|function| function.name == name) {
+            return Err(Error::at(
+                format!("duplicate function declaration: '{name}'"),
+                function_position.unwrap_or(SourcePosition { line: 1, column: 1 }),
+            ));
+        }
+
+        let parameters = self.parse_parameters(&name)?;
+        let body = self.parse_function_body()?;
+
+        let semicolon = self.advance();
+        if !matches!(
+            semicolon,
+            Some(Token {
+                kind: TokenKind::Semicolon,
+                ..
+            })
+        ) {
+            let position = semicolon.map(|token| token.position).or(function_position);
+            return Err(Error::at(
+                format!("expected ';' after declaration of function '{name}'"),
+                position.unwrap_or(SourcePosition { line: 1, column: 1 }),
+            ));
+        }
+
+        Ok(FunctionDeclaration {
+            name,
+            parameters,
+            body,
+            position: function_position,
+        })
+    }
+
+    /// Parses the `(param, ...)` parameter list of a function. Parameters are
+    /// plain identifiers; duplicates are rejected within the single list.
+    fn parse_parameters(&mut self, name: &str) -> Result<Vec<String>, Error> {
+        let open = self.advance();
+        if !matches!(
+            open,
+            Some(Token {
+                kind: TokenKind::LeftParen,
+                ..
+            })
+        ) {
+            let position = open
+                .map(|token| token.position)
+                .or_else(|| self.peek().map(|token| token.position));
+            return Err(Error::at(
+                format!("expected '(' after function name '{name}'"),
+                position.unwrap_or(SourcePosition { line: 1, column: 1 }),
+            ));
+        }
+
+        let mut parameters = Vec::new();
+        loop {
+            // An empty list `()` or a trailing comma are not supported. Every
+            // iteration either breaks on `)` or consumes one parameter plus an
+            // optional trailing comma, so it always makes progress.
+            if self.peek().is_none() {
+                return Err(self.error_here("unmatched '(' in function parameter list"));
+            }
+            if matches!(self.peek_kind(), Some(TokenKind::RightParen)) {
+                self.advance();
+                break;
+            }
+
+            match self.advance() {
+                Some(Token {
+                    kind: TokenKind::Identifier(param),
+                    position,
+                }) => {
+                    let param = param.clone();
+                    if parameters.contains(&param) {
+                        return Err(Error::at(
+                            format!("duplicate parameter name in function '{name}': '{param}'"),
+                            *position,
+                        ));
+                    }
+                    parameters.push(param);
+                    if matches!(self.peek_kind(), Some(TokenKind::RightParen)) {
+                        self.advance();
+                        break;
+                    }
+                    if matches!(self.peek_kind(), Some(TokenKind::Comma)) {
+                        self.advance();
+                    } else {
+                        return Err(self.error_here(format!(
+                            "expected ',' or ')' in function '{name}' parameter list"
+                        )));
+                    }
+                }
+                Some(token) => {
+                    return Err(Error::at(
+                        format!("expected a parameter name after '(' in function '{name}'"),
+                        token.position,
+                    ))
+                }
+                None => return Err(self.error_here("unmatched '(' in function parameter list")),
+            }
+        }
+
+        Ok(parameters)
+    }
+
+    /// Parses a `(arg, ...)` call after an identifier callee has already been
+    /// consumed. Trailing commas are not supported.
+    fn parse_call(
+        &mut self,
+        callee: String,
+        position: Option<SourcePosition>,
+    ) -> Result<Expression, Error> {
+        self.advance(); // consume '('
+
+        let mut arguments = Vec::new();
+        loop {
+            if self.peek().is_none() {
+                return Err(Error::at(
+                    "unmatched '(' in function call",
+                    position.unwrap_or(SourcePosition { line: 1, column: 1 }),
+                ));
+            }
+            if matches!(self.peek_kind(), Some(TokenKind::RightParen)) {
+                self.advance();
+                break;
+            }
+            if matches!(self.peek_kind(), Some(TokenKind::Comma)) {
+                return Err(Error::at(
+                    "unexpected ',' in function call",
+                    self.peek()
+                        .map(|t| t.position)
+                        .unwrap_or(SourcePosition { line: 1, column: 1 }),
+                ));
+            }
+
+            arguments.push(self.parse_expression()?);
+            if matches!(self.peek_kind(), Some(TokenKind::RightParen)) {
+                self.advance();
+                break;
+            }
+            if matches!(self.peek_kind(), Some(TokenKind::Comma)) {
+                self.advance();
+            } else {
+                return Err(self.error_here("expected ',' or ')' in function call arguments"));
+            }
+        }
+
+        Ok(Expression::Call {
+            callee,
+            arguments,
+            position,
+        })
+    }
+
+    /// Parses the block body of a function after its `=`. Function bodies are
+    /// blocks just like `if`/`else` branches: `{ declaration* expression }`.
+    fn parse_function_body(&mut self) -> Result<Block, Error> {
+        let equals = self.advance();
+        if !matches!(
+            equals,
+            Some(Token {
+                kind: TokenKind::Equals,
+                ..
+            })
+        ) {
+            let position = equals
+                .map(|token| token.position)
+                .or_else(|| self.peek().map(|token| token.position));
+            return Err(Error::at(
+                "expected '=' before the function body",
+                position.unwrap_or(SourcePosition { line: 1, column: 1 }),
+            ));
+        }
+
+        if !matches!(self.peek_kind(), Some(TokenKind::LeftBrace)) {
+            return match self.peek() {
+                Some(token) => Err(Error::at(
+                    "expected a block for the function body",
+                    token.position,
+                )),
+                None => Err(Error::new("expected a block for the function body")),
+            };
+        }
+
+        self.parse_block()
     }
 
     /// Parses zero or more `let` declarations that belong to the current
@@ -326,10 +550,18 @@ impl<'a> Parser<'a> {
             Some(Token {
                 kind: TokenKind::Identifier(name),
                 position,
-            }) => Ok(Expression::Variable {
-                name: name.clone(),
-                position: Some(*position),
-            }),
+            }) => {
+                // Copy the owned values out of the token before borrowing `self`
+                // again, so the `match self.advance()` borrow is released.
+                let name = name.clone();
+                let position = Some(*position);
+                // An identifier followed by `(` is a function call; otherwise
+                // it is a plain variable reference.
+                if matches!(self.peek_kind(), Some(TokenKind::LeftParen)) {
+                    return self.parse_call(name, position);
+                }
+                Ok(Expression::Variable { name, position })
+            }
             Some(Token {
                 kind: TokenKind::LeftParen,
                 ..

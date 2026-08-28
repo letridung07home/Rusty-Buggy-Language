@@ -11,9 +11,11 @@ decimal integer literals, `true`/`false` literals, `"..."` string literals
 `-` and `!`, the comparison operators `<`, `<=`, `>`, `>=`, `==`, and `!=`,
 short-circuiting `&&` and `||`, the arithmetic operators `+`, `-`, `*`, `/`,
 and `%` with checked signed 64-bit arithmetic, `if`/`else` expressions with
-`{ }` blocks and lexical scoping, and `//` line comments and `/* */` block
-comments. Comparisons produce real booleans, `+` concatenates strings, and a
-static type checker rejects ill-typed programs before evaluation.
+`{ }` blocks and lexical scoping, function declarations
+(`fn name(param, ...) = { ... };`) with recursive calls and monomorphic type
+inference, and `//` line comments and `/* */` block comments. Comparisons
+produce real booleans, `+` concatenates strings, and a static type checker
+rejects ill-typed programs before evaluation.
 
 Programs can also be evaluated programmatically: the library's `evaluate`
 entry point returns a typed `Value` result (`Int`, `Bool`, or `String`)
@@ -47,6 +49,12 @@ cargo run -- "\"hello\" + \" \" + \"world\""
 
 cargo run -- "let temp = 32; if temp > 30 { \"hot\" } else { \"cold\" }"
 # hot
+
+cargo run -- "fn square(x) = { x * x }; square(7)"
+# 49
+
+cargo run -- "fn fact(n) = { if n <= 1 { 1 } else { n * fact(n - 1) } }; fact(5)"
+# 120
 
 cargo run -- "1 /* group */ + 2 * 3 // note"
 # 7

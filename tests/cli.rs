@@ -201,6 +201,36 @@ fn evaluates_string_programs_and_prints_without_quotes() {
 }
 
 #[test]
+fn evaluates_function_programs() {
+    let output =
+        run_cli(&["fn double(x) = { x * 2 }; fn add(a, b) = { a + b }; double(20) + add(1, 1)"]);
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"42\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn evaluates_recursive_function_programs() {
+    let output = run_cli(&[
+        "fn factorial(n) = { if n <= 1 { 1 } else { n * factorial(n - 1) } }; factorial(6)",
+    ]);
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"720\n");
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn reports_undefined_functions_as_a_type_error() {
+    let output = run_cli(&["fn f(x) = { x + 1 }; missing(1)"]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("undefined function: 'missing'"));
+}
+
+#[test]
 fn evaluates_if_else_programs() {
     let output = run_cli(&["if 1 < 2 { 10 } else { 20 }"]);
 
@@ -444,7 +474,7 @@ fn expected_help() -> String {
         "       rusty-buggy-language [--positions] [--input-limit <bytes>] -f <path> | --file <path>\n",
         "       rusty-buggy-language [--positions] [--input-limit <bytes>] --stdin\n",
         "\n",
-        "Evaluates an expression program with immutable let bindings, integers, booleans (true/false, !, &&, ||), strings (\"...\" with \\n, \\t, \\\\, and \\\" escapes), if/else expressions with { } blocks, comparisons (<, <=, >, >=, ==, !=), +, -, *, /, %, // and /* */ comments, parentheses, and prefix -.\n",
+        "Evaluates an expression program with immutable let bindings, integers, booleans (true/false, !, &&, ||), strings (\"...\" with \\n, \\t, \\\\, and \\\" escapes), if/else expressions with { } blocks, function declarations (fn name(param, ...) = { body }; with recursive calls), comparisons (<, <=, >, >=, ==, !=), +, -, *, /, %, // and /* */ comments, parentheses, and prefix -.\n",
         "\n",
         "The program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input. Source modes are mutually exclusive. `--repl` reads one program per line from standard input and prints each result.\n",
         "\n",

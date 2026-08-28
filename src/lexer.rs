@@ -12,10 +12,12 @@ pub(crate) enum TokenKind {
     String(String),
     Identifier(String),
     Let,
+    Fn,
     True,
     False,
     If,
     Else,
+    Comma,
     Equals,
     LessThan,
     LessThanOrEqual,
@@ -123,6 +125,10 @@ impl<'a> Lexer<'a> {
                 ';' => {
                     self.advance();
                     TokenKind::Semicolon
+                }
+                ',' => {
+                    self.advance();
+                    TokenKind::Comma
                 }
                 '+' => {
                     self.advance();
@@ -232,6 +238,7 @@ impl<'a> Lexer<'a> {
         let name = &self.input[start..self.position];
         let kind = match name {
             "let" => TokenKind::Let,
+            "fn" => TokenKind::Fn,
             "true" => TokenKind::True,
             "false" => TokenKind::False,
             "if" => TokenKind::If,
@@ -372,10 +379,12 @@ impl Token {
             TokenKind::String(_) => "string literal",
             TokenKind::Identifier(_) => "identifier",
             TokenKind::Let => "'let'",
+            TokenKind::Fn => "'fn'",
             TokenKind::True => "'true'",
             TokenKind::False => "'false'",
             TokenKind::If => "'if'",
             TokenKind::Else => "'else'",
+            TokenKind::Comma => "','",
             TokenKind::Equals => "'='",
             TokenKind::LessThan => "'<'",
             TokenKind::LessThanOrEqual => "'<='",
