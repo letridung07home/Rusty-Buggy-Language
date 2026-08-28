@@ -148,20 +148,24 @@ impl<'a> Parser<'a> {
 
         let mut parameters = Vec::new();
         loop {
-            // An empty list `()` or a trailing comma are not supported; a
-            // comma or non-identifier where a parameter is expected is an
-            // error. The loop is driven by the explicit `continue`/`break`
-            // paths below, so every iteration starts on a fresh token.
-            match self.peek_kind() {
-                None => return Err(self.error_here("unmatched '(' in function parameter list")),
-                Some(TokenKind::RightParen) => {
-                    self.advance();
-                    break;
-                }
-                Some(TokenKind::Identifier(param)) => {
+            // An empty list `()` or a trailing comma are not supported. Every
+            // iteration either breaks on `)` or consumes one parameter plus an
+            // optional trailing comma, so it always makes progress.
+            if self.peek().is_none() {
+                return Err(self.error_here("unmatched '(' in function parameter list"));
+            }
+            if matches!(self.peek_kind(), Some(TokenKind::RightParen)) {
+                self.advance();
+                break;
+            }
+
+            match self.advance() {
+                Some(Token {
+                    kind: TokenKind::Identifier(param),
+                    position,
+                }) => {
                     let param = param.clone();
-                    let param_position = self.peek().map(|t| t.position);
-                    self.advance();
+                    let param_position = Some(*position);
                     if parameters.contains(&param) {
                         return Err(Error::at(
                             format!("duplicate parameter name in function '{name}': '{param}'"),
@@ -169,30 +173,29 @@ impl<'a> Parser<'a> {
                         ));
                     }
                     parameters.push(param);
-                    match self.peek_kind() {
-                        Some(TokenKind::Comma) => {
-                            self.advance();
-                            continue;
-                        }
-                        Some(TokenKind::RightParen) => {
-                            self.advance();
-                            break;
-                        }
-                        _ => {
-                            return Err(self.error_here(format!(
-                                "expected ',' or ')' in function '{name}' parameter list"
-                            )))
-                        }
+                    if matches!(self.peek_kind(), Some(TokenKind::RightParen)) {
+                        self.advance();
+                        break;
+                    }
+                    if matches!(self.peek_kind(), Some(TokenKind::Comma)) {
+                        self.advance();
+                    } else {
+                        return Err(self.error_here(format!(
+                            "expected ',' or ')' in function '{name}' parameter list"
+                        )));
                     }
                 }
-                Some(_) => {
+                Some(token) => {
                     return Err(Error::at(
                         format!("expected a parameter name after '(' in function '{name}'"),
-                        self.peek().map(|t| t.position).unwrap_or(SourcePosition { line: 1, column: 1 }),
+                        token.position,
                     ))
                 }
+                None => return Err(self.error_here("unmatched '(' in function parameter list")),
             }
         }
+
+        Ok(parameters)
     }
 
     /// Parses a `(arg, ...)` call after an identifier callee has already been
@@ -202,41 +205,32 @@ impl<'a> Parser<'a> {
 
         let mut arguments = Vec::new();
         loop {
-            match self.peek_kind() {
-                None => {
-                    return Err(Error::at(
-                        "unmatched '(' in function call",
-                        position.unwrap_or(SourcePosition { line: 1, column: 1 }),
-                    ))
-                }
-                Some(TokenKind::RightParen) => {
-                    self.advance();
-                    break;
-                }
-                Some(TokenKind::Comma) => {
-                    return Err(Error::at(
-                        "unexpected ',' in function call",
-                        self.peek().map(|t| t.position).unwrap_or(SourcePosition { line: 1, column: 1 }),
-                    ))
-                }
-                _ => {
-                    arguments.push(self.parse_expression()?);
-                    match self.peek_kind() {
-                        Some(TokenKind::Comma) => {
-                            self.advance();
-                            continue;
-                        }
-                        Some(TokenKind::RightParen) => {
-                            self.advance();
-                            break;
-                        }
-                        _ => {
-                            return Err(self.error_here(
-                                "expected ',' or ')' in function call arguments",
-                            ))
-                        }
-                    }
-                }
+            if self.peek().is_none() {
+                return Err(Error::at(
+                    "unmatched '(' in function call",
+                    position.unwrap_or(SourcePosition { line: 1, column: 1 }),
+                ));
+            }
+            if matches!(self.peek_kind(), Some(TokenKind::RightParen)) {
+                self.advance();
+                break;
+            }
+            if matches!(self.peek_kind(), Some(TokenKind::Comma)) {
+                return Err(Error::at(
+                    "unexpected ',' in function call",
+                    self.peek().map(|t| t.position).unwrap_or(SourcePosition { line: 1, column: 1 }),
+                ));
+            }
+
+            arguments.push(self.parse_expression()?);
+            if matches!(self.peek_kind(), Some(TokenKind::RightParen)) {
+                self.advance();
+                break;
+            }
+            if matches!(self.peek_kind(), Some(TokenKind::Comma)) {
+                self.advance();
+            } else {
+                return Err(self.error_here("expected ',' or ')' in function call arguments"));
             }
         }
 
@@ -548,15 +542,16 @@ impl<'a> Parser<'a> {
                 kind: TokenKind::Identifier(name),
                 position,
             }) => {
+                // Copy the owned values out of the token before borrowing `self`
+                // again, so the `match self.advance()` borrow is released.
+                let name = name.clone();
+                let position = Some(*position);
                 // An identifier followed by `(` is a function call; otherwise
                 // it is a plain variable reference.
                 if matches!(self.peek_kind(), Some(TokenKind::LeftParen)) {
-                    return self.parse_call(name.clone(), Some(*position));
+                    return self.parse_call(name, position);
                 }
-                Ok(Expression::Variable {
-                    name: name.clone(),
-                    position: Some(*position),
-                })
+                Ok(Expression::Variable { name, position })
             }
             Some(Token {
                 kind: TokenKind::LeftParen,

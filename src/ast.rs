@@ -15,7 +15,7 @@ pub(crate) enum BinaryOperator {
     NotEqual,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Expression {
     Literal {
         value: u64,
@@ -89,7 +89,7 @@ impl Expression {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Declaration {
     pub(crate) name: String,
     pub(crate) initializer: Expression,
@@ -99,7 +99,7 @@ pub(crate) struct Declaration {
 /// A `{ declaration* expression }` block, used as the branch of an `if`/`else`
 /// expression and as a function body. Declarations inside a block are scoped
 /// to that block.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Block {
     pub(crate) declarations: Vec<Declaration>,
     pub(crate) expression: Expression,
@@ -109,7 +109,7 @@ pub(crate) struct Block {
 /// scoped to the body; the body is a block (`{ declaration* expression }`).
 /// Functions are visible to later declarations, the final expression, and to
 /// recursive calls from their own body.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct FunctionDeclaration {
     pub(crate) name: String,
     pub(crate) parameters: Vec<String>,
