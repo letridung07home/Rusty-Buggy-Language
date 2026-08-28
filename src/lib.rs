@@ -95,8 +95,8 @@ pub fn evaluate_with_limits(program: &str, limits: &Limits) -> Result<Value, Err
 
     let tokens = lexer::Lexer::new(program).tokenize()?;
     let program = parser::Parser::new(&tokens).parse()?;
-    typecheck::check(&program)?;
-    evaluator::evaluate(&program)
+    let functions = typecheck::resolve(&program)?;
+    evaluator::evaluate(&program, &functions)
 }
 
 #[cfg(test)]
@@ -285,6 +285,36 @@ mod tests {
         assert_eq!(
             evaluate(r#""a\x""#).unwrap_err().to_string(),
             "invalid escape sequence in string literal"
+        );
+    }
+
+    #[test]
+    fn evaluates_function_declarations_and_recursive_calls() {
+        assert_eq!(
+            evaluate("fn sq(x) = { x * x }; sq(12)"),
+            Ok(int(144))
+        );
+        assert_eq!(
+            evaluate("fn fact(n) = { if n <= 1 { 1 } else { n * fact(n - 1) } }; fact(6)"),
+            Ok(int(720))
+        );
+        assert_eq!(
+            evaluate("fn greet(who) = { \"hi \" + who }; greet(\"bob\")"),
+            Ok(Value::String("hi bob".to_owned()))
+        );
+    }
+
+    #[test]
+    fn reports_function_errors_through_the_library_facade() {
+        assert_eq!(
+            evaluate("fn f(x) = { x }; f(1, 2)")
+                .unwrap_err()
+                .to_string(),
+            "wrong number of arguments for function 'f': expected 1, found 2"
+        );
+        assert_eq!(
+            evaluate("missing(1)").unwrap_err().to_string(),
+            "undefined function: 'missing'"
         );
     }
 }
