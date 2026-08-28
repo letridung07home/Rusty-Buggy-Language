@@ -1,0 +1,10 @@
+// Recursion: a function may call itself (or another function that calls it
+// back). Compute factorials and test even/odd numbers via mutual recursion.
+// Run with: cargo run -- examples/recursion.rbl
+fn factorial(n) = { if n <= 1 { 1 } else { n * factorial(n - 1) } };
+fn is_even(n) = { if n == 0 { true } else { is_odd(n - 1) } };
+fn is_odd(n) = { if n == 0 { false } else { is_even(n - 1) } };
+
+let f = factorial(6);          // 720
+let parity = is_even(10);      // true
+factorial(5) + (if parity { 1 } else { 0 })

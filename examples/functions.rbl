@@ -1,0 +1,14 @@
+// Functions: declare with `fn name(param, ...) = { body };` and call them in
+// later declarations or the final expression. Bodies are blocks, so they may
+// declare local variables; parameters are immutable and scoped to the body.
+// Run with: cargo run -- examples/functions.rbl
+fn square(x) = { x * x };
+fn max(a, b) = { if a > b { a } else { b } };
+fn category(n) = { let big = if n > 20 { "large" } else { "small" }; big };
+fn shout(word) = { word + "!" };
+
+let side = max(3, 7);          // 7
+let area = square(side);       // 49
+let label = category(area);    // "large"
+
+shout(label)

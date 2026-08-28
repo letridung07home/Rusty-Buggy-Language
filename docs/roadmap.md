@@ -117,11 +117,13 @@ agent-friendly. The v2 series deliberately breaks the v1.0 contract; the
 headline change is a public `Value` type in place of the bare `i64` result.
 
 **Status:** In progress. v2.0.0 opened the series with the breaking
-typed-`Value` foundation, and v2.1.0 ships the richer-values milestone:
-booleans, strings, `if`/`else`, and the static type checker. Functions, the
-agent-facing toolkit, and the remaining stability items are still open. The
-task list below is the v2 backlog; each release picks the tasks it will ship,
-and tasks are not bound to a specific version.
+typed-`Value` foundation, v2.1.0 ships the richer-values milestone (booleans,
+strings, `if`/`else`, and the static type checker), and v2.2.0 ships the
+functions milestone (`fn` declarations, recursive calls, and monomorphic
+fixed-point type inference). The agent-facing toolkit and the remaining
+stability items are still open. The task list below is the v2 backlog; each
+release picks the tasks it will ship, and tasks are not bound to a specific
+version.
 
 ### Series commitments
 
@@ -168,24 +170,24 @@ and tasks are not bound to a specific version.
   results plus boolean and string coverage; keep the fuzz targets on the
   `evaluate` entry point.
 
+### v2.2.0 milestone — delivered
+
+- [x] Add function declarations `fn name(param, ...) = expression;` that
+  later declarations and the final expression can call; bodies may be
+  blocks. Parameters are immutable and scoped to the body.
+- [x] Support recursion, with monomorphic type inference computed by
+  fixed-point iteration over the small type lattice so parameter and result
+  types are inferred from bodies and call sites.
+- [x] Report positioned errors for calling an undefined function, passing
+  the wrong number of arguments, and call-site type mismatches.
+- [x] Extend the property-based reference model to generated function
+  programs.
+
 ### Remaining v2 backlog
 
 Concrete deliverables for the later v2 releases, grouped by theme and
 ordered by priority. Each one updates the language reference and changelog
 on completion. Developers choose which tasks ship in each release.
-
-**Functions**
-
-- [ ] Add function declarations `fn name(param, ...) = expression;` that
-  later declarations and the final expression can call; bodies may be
-  blocks. Parameters are immutable and scoped to the body.
-- [ ] Support recursion, with monomorphic type inference computed by
-  fixed-point iteration over the small type lattice so parameter and result
-  types are inferred from bodies and call sites.
-- [ ] Report positioned errors for calling an undefined function, passing
-  the wrong number of arguments, and call-site type mismatches.
-- [ ] Extend the property-based reference model to generated function
-  programs.
 
 **Agent-facing toolkit**
 

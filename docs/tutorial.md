@@ -161,6 +161,29 @@ true
 > (press Ctrl-D to exit)
 ```
 
+## Functions
+
+Beyond variables and branching, you can declare functions with parameters and a
+block body. Each function's parameter and result types are inferred from its
+body and the places it is called:
+
+```bash
+cargo run -- "fn square(x) = { x * x }; square(7)"
+# 49
+
+cargo run -- "fn max(a, b) = { if a > b { a } else { b } }; max(3, 7)"
+# 7
+
+cargo run -- "fn fact(n) = { if n <= 1 { 1 } else { n * fact(n - 1) } }; fact(5)"
+# 120
+```
+
+A function may call itself (recursion) or other functions. Parameters are
+immutable and scoped to the body, and the body is a block so it can declare
+local variables that stay inside the call. Calling an undefined function, using
+the wrong number of arguments, or passing a value of the wrong type is a
+type error reported before evaluation.
+
 ## Example programs
 
 The `examples/` directory contains runnable programs for each feature:
@@ -170,6 +193,8 @@ The `examples/` directory contains runnable programs for each feature:
 - `comparisons.rbl` — comparisons as real booleans with `&&`, `||`, and `!`.
 - `strings.rbl` — string concatenation, escapes, and equality.
 - `branching.rbl` — `if`/`else` with scoped declarations.
+- `functions.rbl` — function declarations, calls, and block bodies.
+- `recursion.rbl` — recursion and mutual recursion.
 - `fahrenheit.rbl` — an inline conversion.
 - `session.rbl` — a multi-step immutable-binding program.
 
