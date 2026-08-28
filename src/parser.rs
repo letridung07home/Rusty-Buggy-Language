@@ -361,8 +361,8 @@ impl<'a> Parser<'a> {
 
         Ok(Expression::If {
             condition: Box::new(condition),
-            then_branch,
-            else_branch,
+            then_branch: Box::new(then_branch),
+            else_branch: Box::new(else_branch),
             position: Some(position),
         })
     }

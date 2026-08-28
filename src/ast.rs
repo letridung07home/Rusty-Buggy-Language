@@ -59,8 +59,8 @@ pub(crate) enum Expression {
     },
     If {
         condition: Box<Expression>,
-        then_branch: Block,
-        else_branch: Block,
+        then_branch: Box<Block>,
+        else_branch: Box<Block>,
         position: Option<SourcePosition>,
     },
 }
