@@ -109,7 +109,6 @@ enum Expr {
 struct Function {
     name: String,
     params: Vec<(String, GenType)>,
-    result: GenType,
     body: Expr,
 }
 
@@ -224,7 +223,7 @@ fn render(expr: &Expr) -> String {
             render(else_branch)
         ),
         Expr::Call { name, args } => {
-            let args: Vec<String> = args.iter().map(|arg| render(arg)).collect();
+            let args: Vec<String> = args.iter().map(render).collect();
             format!("{name}({})", args.join(", "))
         }
     }
@@ -691,7 +690,6 @@ fn random_function_program(prng: &mut Prng) -> Program {
         functions.push(Function {
             name: name.clone(),
             params,
-            result,
             body,
         });
         global_signatures.push((name, param_types, result));
