@@ -55,7 +55,7 @@ The evaluator applies two built-in limits so that adversarial or oversized
 input reports a clear error instead of exhausting memory or the call stack.
 
 - **Nesting depth.** Parenthesized expressions, chains of prefix `-`/`!`, and
-  nested `if`/`else` blocks may not nest deeper than 256 levels. Exceeding the
+  nested `if`/`else` blocks may not nest deeper than 128 levels. Exceeding the
   limit reports `program too deeply nested`. Ordinary programs (even with heavy
   parentheses) are well below this.
 - **Input size.** A program is rejected with `program is too large to

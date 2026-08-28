@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `if ready { 10 } else { 0 }` instead).
 - The property-based reference model now generates and checks typed programs
   covering booleans, strings, and `if`/`else` alongside integer arithmetic.
+- The parser nesting-depth limit is lowered to 128 levels: the richer
+  expression grammar recurses through more frames per nesting level, so 256
+  could overflow the stack on adversarial input instead of reporting
+  `program too deeply nested`.
 
 ## [2.0.1] - 2026-08-26
 

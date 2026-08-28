@@ -572,7 +572,9 @@ mod tests {
             "1 && true",
             "true && 1",
             "1 || true",
-            "true || 1",
+            // `true || 1` would short-circuit without evaluating the
+            // ill-typed right operand, so use a false left side instead.
+            "false || 1",
             "if 1 { 2 } else { 3 }",
         ] {
             let parsed = parse_only(source);

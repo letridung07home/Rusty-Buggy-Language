@@ -3,9 +3,12 @@ use crate::error::{Error, SourcePosition};
 use crate::lexer::{Token, TokenKind};
 
 /// Maximum recursive nesting depth the parser accepts before refusing input.
-/// This is intentionally far below the thread stack budget so adversarial
-/// input reports a clear error instead of overflowing the stack.
-const MAX_DEPTH: usize = 256;
+///
+/// Kept well below the thread stack budget: each nesting level recurses
+/// through the whole expression-precedence chain (about eight frames per
+/// level), so an overly deep limit would overflow the stack on adversarial
+/// input instead of reporting a clear error.
+const MAX_DEPTH: usize = 128;
 
 pub(crate) struct Parser<'a> {
     tokens: &'a [Token],
@@ -613,7 +616,7 @@ mod tests {
 
     #[test]
     fn accepts_deep_parentheses_within_the_limit() {
-        let depth = 200;
+        let depth = 100;
         let input = format!("{}{}{}", "(".repeat(depth), "1", ")".repeat(depth));
         assert!(parses_ok(&input));
     }
