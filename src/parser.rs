@@ -166,11 +166,10 @@ impl<'a> Parser<'a> {
                     position,
                 }) => {
                     let param = param.clone();
-                    let param_position = Some(*position);
                     if parameters.contains(&param) {
                         return Err(Error::at(
                             format!("duplicate parameter name in function '{name}': '{param}'"),
-                            param_position.unwrap_or(SourcePosition { line: 1, column: 1 }),
+                            *position,
                         ));
                     }
                     parameters.push(param);
