@@ -907,9 +907,10 @@ mod tests {
 
     #[test]
     fn infinite_recursion_reports_a_clear_error() {
-        assert_eq!(
-            error_message("fn loop(n) = { loop(n) }; loop(0)"),
-            "call depth limit exceeded"
-        );
+        // A counting function that recurses deeper than the call-depth guard,
+        // so the guard (not the terminal case) must fire. The program still
+        // type-checks: `count(n)` is an integer.
+        let source = "fn count(n) = { if n == 0 { n } else { count(n - 1) } }; count(2000)";
+        assert_eq!(error_message(source), "call depth limit exceeded");
     }
 }

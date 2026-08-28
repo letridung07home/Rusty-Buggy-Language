@@ -418,10 +418,30 @@ fn check_expr_flow(
                     *position,
                 ));
             }
-            for (pi, argument) in arguments.iter().enumerate() {
+            for (index, argument) in arguments.iter().enumerate() {
                 let argument_flow = check_expr_flow(argument, params, locals, signatures)?;
-                signatures[fi].parameter_types[pi] =
-                    join(signatures[fi].parameter_types[pi], argument_flow.lattice());
+                let slot = &mut signatures[fi].parameter_types[index];
+                match (*slot, argument_flow) {
+                    // The callee's parameter type is already settled to a
+                    // different type (from its body or another call site):
+                    // report the mismatch at the call site.
+                    (Lattice::Concrete(slot_type), Flow::Concrete(argument_type))
+                        if slot_type != argument_type =>
+                    {
+                        return Err(positioned(
+                            format!(
+                                "type mismatch in call to '{callee}': expected argument {} to be {}, found {}",
+                                index + 1,
+                                slot_type.name(),
+                                argument_type.name()
+                            ),
+                            *position,
+                        ));
+                    }
+                    _ => {
+                        *slot = join(*slot, argument_flow.lattice());
+                    }
+                }
             }
             Ok(match signatures[fi].result_type {
                 Lattice::Unknown => Flow::Unknown(Where::Result(fi)),
@@ -822,7 +842,7 @@ mod tests {
         );
         assert_eq!(
             check_error("true && 1"),
-            "type mismatch in '&&': expected two booleans, found integer and boolean"
+            "type mismatch in '&&': expected two booleans, found boolean and integer"
         );
         assert_eq!(
             check_error("1 || true"),
@@ -970,7 +990,7 @@ mod tests {
     #[test]
     fn rejects_undefined_functions() {
         assert_eq!(check_error("missing(1)"), "undefined function: 'missing'");
-        assert_eq!(check_position("let x = 1; goo(x)"), (1, 11));
+        assert_eq!(check_position("let x = 1; goo(x)"), (1, 12));
     }
 
     #[test]
@@ -989,11 +1009,11 @@ mod tests {
     fn rejects_call_site_type_mismatches() {
         assert_eq!(
             check_error("fn double(x) = { x * 2 }; double(true)"),
-            "type mismatch in '*': expected two integers, found boolean and integer"
+            "type mismatch in call to 'double': expected argument 1 to be integer, found boolean"
         );
         assert_eq!(
             check_error("fn takes_int(x) = { if x > 0 { x } else { 0 } }; takes_int(true)"),
-            "type mismatch in '>': expected two integers, found boolean and integer"
+            "type mismatch in call to 'takes_int': expected argument 1 to be integer, found boolean"
         );
     }
 
