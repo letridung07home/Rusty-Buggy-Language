@@ -103,12 +103,6 @@ struct Signature {
 /// function's name to its declaration plus resolved parameter and result types.
 pub(crate) type ResolvedFunctions = HashMap<String, Function>;
 
-/// Public entry point: type-checks a program, returning the first positioned
-/// type error.
-pub(crate) fn check(program: &Program) -> Result<(), Error> {
-    resolve(program).map(|_| ())
-}
-
 /// Type-checks the program and returns the resolved function bindings (the
 /// [`ResolvedFunctions`] the evaluator uses to run calls). Doing both in one
 /// call keeps inference single-pass and guarantees the evaluator and the
@@ -784,7 +778,7 @@ fn positioned(message: impl Into<String>, position: Option<SourcePosition>) -> E
 
 #[cfg(test)]
 mod tests {
-    use super::check;
+    use super::resolve;
     use crate::error::Error;
     use crate::lexer::Lexer;
     use crate::parser::Parser;
@@ -792,7 +786,7 @@ mod tests {
     fn check_source(input: &str) -> Result<(), Error> {
         let tokens = Lexer::new(input).tokenize()?;
         let program = Parser::new(&tokens).parse()?;
-        check(&program)
+        resolve(&program).map(|_| ())
     }
 
     fn check_error(input: &str) -> String {

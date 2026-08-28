@@ -6,10 +6,11 @@ use crate::typecheck::ResolvedFunctions;
 use crate::Value;
 
 /// The maximum depth of nested function calls the evaluator allows before
-/// reporting a clear error. With the small per-call stack frame this keeps even
-/// pathological non-terminating recursion from overflowing the thread stack,
-/// mirroring the language's "clear error instead of crash" hardening posture.
-const MAX_CALL_DEPTH: usize = 1000;
+/// reporting a clear error. Kept low enough that even a debug build's default
+/// thread stack (and the MSRV test harness) cannot be overflowed by a few
+/// hundred nested calls, mirroring the parser's nesting-depth limit and the
+/// language's "clear error instead of crash" hardening posture.
+const MAX_CALL_DEPTH: usize = 128;
 
 pub(crate) fn evaluate(program: &Program, functions: &ResolvedFunctions) -> Result<Value, Error> {
     let mut scopes = vec![HashMap::new()];
