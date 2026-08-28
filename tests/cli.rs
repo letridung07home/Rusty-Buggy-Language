@@ -202,7 +202,8 @@ fn evaluates_string_programs_and_prints_without_quotes() {
 
 #[test]
 fn evaluates_function_programs() {
-    let output = run_cli(&["fn double(x) = { x * 2 }; fn add(a, b) = { a + b }; double(20) + add(1, 1)"]);
+    let output =
+        run_cli(&["fn double(x) = { x * 2 }; fn add(a, b) = { a + b }; double(20) + add(1, 1)"]);
 
     assert!(output.status.success());
     assert_eq!(output.stdout, b"42\n");
@@ -211,7 +212,9 @@ fn evaluates_function_programs() {
 
 #[test]
 fn evaluates_recursive_function_programs() {
-    let output = run_cli(&["fn factorial(n) = { if n <= 1 { 1 } else { n * factorial(n - 1) } }; factorial(6)"]);
+    let output = run_cli(&[
+        "fn factorial(n) = { if n <= 1 { 1 } else { n * factorial(n - 1) } }; factorial(6)",
+    ]);
 
     assert!(output.status.success());
     assert_eq!(output.stdout, b"720\n");

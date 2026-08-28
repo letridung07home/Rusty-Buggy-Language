@@ -233,7 +233,11 @@ fn render(expr: &Expr) -> String {
 fn render_program(program: &Program) -> String {
     let mut source = String::new();
     for function in &program.functions {
-        let params: Vec<&str> = function.params.iter().map(|(name, _)| name.as_str()).collect();
+        let params: Vec<&str> = function
+            .params
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect();
         source.push_str(&format!(
             "fn {}({}) = {{ {} }}; ",
             function.name,
@@ -467,7 +471,13 @@ fn random_expr(
             ))),
             1 => Expr::Binary {
                 op: int_arithmetic_operator(prng),
-                left: Box::new(random_expr(prng, depth - 1, GenType::Int, bindings, signatures)),
+                left: Box::new(random_expr(
+                    prng,
+                    depth - 1,
+                    GenType::Int,
+                    bindings,
+                    signatures,
+                )),
                 right: Box::new(random_expr(
                     prng,
                     depth - 1,
@@ -488,12 +498,36 @@ fn random_expr(
                 signatures,
             ))),
             1 => Expr::And(
-                Box::new(random_expr(prng, depth - 1, GenType::Bool, bindings, signatures)),
-                Box::new(random_expr(prng, depth - 1, GenType::Bool, bindings, signatures)),
+                Box::new(random_expr(
+                    prng,
+                    depth - 1,
+                    GenType::Bool,
+                    bindings,
+                    signatures,
+                )),
+                Box::new(random_expr(
+                    prng,
+                    depth - 1,
+                    GenType::Bool,
+                    bindings,
+                    signatures,
+                )),
             ),
             2 => Expr::Or(
-                Box::new(random_expr(prng, depth - 1, GenType::Bool, bindings, signatures)),
-                Box::new(random_expr(prng, depth - 1, GenType::Bool, bindings, signatures)),
+                Box::new(random_expr(
+                    prng,
+                    depth - 1,
+                    GenType::Bool,
+                    bindings,
+                    signatures,
+                )),
+                Box::new(random_expr(
+                    prng,
+                    depth - 1,
+                    GenType::Bool,
+                    bindings,
+                    signatures,
+                )),
             ),
             3 => random_int_comparison(prng, depth, bindings, signatures),
             4 => random_equality(prng, depth, bindings, signatures),
@@ -502,8 +536,20 @@ fn random_expr(
         GenType::Str => match prng.below(3) {
             0 => Expr::Binary {
                 op: BinaryOp::Add,
-                left: Box::new(random_expr(prng, depth - 1, GenType::Str, bindings, signatures)),
-                right: Box::new(random_expr(prng, depth - 1, GenType::Str, bindings, signatures)),
+                left: Box::new(random_expr(
+                    prng,
+                    depth - 1,
+                    GenType::Str,
+                    bindings,
+                    signatures,
+                )),
+                right: Box::new(random_expr(
+                    prng,
+                    depth - 1,
+                    GenType::Str,
+                    bindings,
+                    signatures,
+                )),
             },
             1 => random_if(prng, depth, GenType::Str, bindings, signatures),
             _ => random_expr(prng, depth - 1, GenType::Str, bindings, signatures),
@@ -535,8 +581,20 @@ fn random_int_comparison(
     };
     Expr::Binary {
         op,
-        left: Box::new(random_expr(prng, depth - 1, GenType::Int, bindings, signatures)),
-        right: Box::new(random_expr(prng, depth - 1, GenType::Int, bindings, signatures)),
+        left: Box::new(random_expr(
+            prng,
+            depth - 1,
+            GenType::Int,
+            bindings,
+            signatures,
+        )),
+        right: Box::new(random_expr(
+            prng,
+            depth - 1,
+            GenType::Int,
+            bindings,
+            signatures,
+        )),
     }
 }
 
@@ -586,8 +644,20 @@ fn random_if(
             bindings,
             signatures,
         )),
-        then_branch: Box::new(random_expr(prng, depth - 1, branch_type, bindings, signatures)),
-        else_branch: Box::new(random_expr(prng, depth - 1, branch_type, bindings, signatures)),
+        then_branch: Box::new(random_expr(
+            prng,
+            depth - 1,
+            branch_type,
+            bindings,
+            signatures,
+        )),
+        else_branch: Box::new(random_expr(
+            prng,
+            depth - 1,
+            branch_type,
+            bindings,
+            signatures,
+        )),
     }
 }
 
@@ -627,14 +697,35 @@ fn random_function_program(prng: &mut Prng) -> Program {
         global_signatures.push((name, param_types, result));
     }
 
-    // Top-level body: a final expression with access to every function and no
-    // local declarations, keeping the top level small.
+    // Top-level body: call every function once from `let` declarations so each
+    // function's parameter and result types are pinned by a real call site (an
+    // uncalled function whose parameter is never used by its body would fail
+    // inference). Calls stay acyclic: function bodies only call earlier-indexed
+    // functions, so no cycle can form however the top level reaches them.
+    let mut declarations = Vec::new();
+    let mut bindings: Vec<(String, GenType)> = Vec::new();
+    for (index, (name, param_types, result)) in global_signatures.iter().enumerate() {
+        let mut args = Vec::new();
+        for param in param_types {
+            args.push(random_expr(prng, 3, *param, &bindings, &global_signatures));
+        }
+        let variable = format!("seal{index}");
+        bindings.push((variable.clone(), *result));
+        declarations.push((
+            variable,
+            Expr::Call {
+                name: name.clone(),
+                args,
+            },
+        ));
+    }
+
     let target = random_type(prng);
-    let expression = random_expr(prng, 4, target, &[], &global_signatures);
+    let expression = random_expr(prng, 4, target, &bindings, &global_signatures);
 
     Program {
         functions,
-        declarations: Vec::new(),
+        declarations,
         expression,
     }
 }
