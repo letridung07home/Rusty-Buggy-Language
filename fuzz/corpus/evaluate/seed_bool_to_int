@@ -1,0 +1,1 @@
+let a = bool_to_int(true); let b = bool_to_int(false); a * 10 + b

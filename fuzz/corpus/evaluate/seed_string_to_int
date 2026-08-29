@@ -1,0 +1,1 @@
+let n = string_to_int("007"); let m = string_to_int("-42"); n + m

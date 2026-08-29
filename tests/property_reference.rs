@@ -3,13 +3,15 @@
 //!
 //! For a deterministic number of random cases, a generator builds a
 //! well-typed expression (or a program of immutable `let` bindings ending in
-//! an expression) over integers, booleans, and strings, renders it back to
-//! source text with minimal parentheses that respect the language's
-//! precedence and associativity, and then requires the
-//! lexer/parser/type-checker/evaluator pipeline and a straightforward
-//! recursive reference evaluator to agree: either both succeed with the same
-//! [`Value`], or both fail. Being dependency-free, the test runs identically
-//! on the MSRV.
+//! an expression) over integers, booleans, and strings, with calls to the
+//! five fixed-signature builtins (`len`, `int_to_string`, `string_to_int`,
+//! `bool_to_int`, `int_to_bool`) and lexicographic string ordering woven in
+//! like any other node. It renders the tree back to source text with minimal
+//! parentheses that respect the language's precedence and associativity, and
+//! then requires the lexer/parser/type-checker/evaluator pipeline and a
+//! straightforward recursive reference evaluator to agree: either both
+//! succeed with the same [`Value`], or both fail. Being dependency-free, the
+//! test runs identically on the MSRV.
 
 use std::collections::HashMap;
 
@@ -21,7 +23,10 @@ use rusty_buggy_language::{evaluate, Value};
 const LITERAL_BOUND: i64 = 50;
 
 /// Small strings used for generated string literals, including every escape
-/// the lexer supports so the render/parse round trip is exercised.
+/// the lexer supports so the render/parse round trip is exercised. The
+/// numeric texts feed `string_to_int`'s success paths directly, with leading
+/// zeros and the exact `i64::MIN` boundary alongside texts (`+5`, a leading
+/// space, an `i64` overflow) that both sides must reject.
 const STRING_POOL: &[&str] = &[
     "",
     "hello",
@@ -30,10 +35,24 @@ const STRING_POOL: &[&str] = &[
     "tab\there",
     "new\nline",
     "back\\slash",
+    "42",
+    "-7",
+    "007",
+    "9223372036854775808",
+    "-9223372036854775808",
 ];
 
 /// The number of declaration expressions generated ahead of the final one.
 const MAX_DECLARATIONS: usize = 3;
+
+/// Percent chance that an interior expression is generated as a builtin call
+/// instead of an operator node, per result type: integer-typed expressions
+/// have three builtins to pick from, string-typed ones one, and boolean-typed
+/// ones one. The values keep builtin calls frequent while the pre-existing
+/// node kinds retain most of their original share.
+const INT_BUILTIN_CHANCE: u64 = 35;
+const BOOL_BUILTIN_CHANCE: u64 = 25;
+const STR_BUILTIN_CHANCE: u64 = 30;
 
 /// Number of property cases to run per seed. Kept modest so the suite stays
 /// fast; each case is an independent evaluation.
@@ -89,6 +108,40 @@ enum BinaryOp {
     NotEqual,
 }
 
+/// The five fixed-signature builtin functions the language provides. The
+/// generator picks them by result type and recurses with the argument type
+/// the type checker demands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Builtin {
+    Len,
+    IntToString,
+    StringToInt,
+    BoolToInt,
+    IntToBool,
+}
+
+impl Builtin {
+    /// The identifier as it appears in source text.
+    fn name(self) -> &'static str {
+        match self {
+            Builtin::Len => "len",
+            Builtin::IntToString => "int_to_string",
+            Builtin::StringToInt => "string_to_int",
+            Builtin::BoolToInt => "bool_to_int",
+            Builtin::IntToBool => "int_to_bool",
+        }
+    }
+
+    /// The static type the call's single argument must have.
+    fn argument_type(self) -> GenType {
+        match self {
+            Builtin::Len | Builtin::StringToInt => GenType::Str,
+            Builtin::IntToString | Builtin::IntToBool => GenType::Int,
+            Builtin::BoolToInt => GenType::Bool,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 enum Expr {
     Lit(i64),
@@ -109,6 +162,10 @@ enum Expr {
         then_branch: Box<Expr>,
         else_branch: Box<Expr>,
     },
+    Call {
+        builtin: Builtin,
+        argument: Box<Expr>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -128,7 +185,12 @@ enum RefValue {
 /// rendering. Higher binds tighter.
 fn precedence(expr: &Expr) -> u8 {
     match expr {
-        Expr::Lit(_) | Expr::BoolLit(_) | Expr::StrLit(_) | Expr::Var(_) | Expr::If { .. } => 6,
+        Expr::Lit(_)
+        | Expr::BoolLit(_)
+        | Expr::StrLit(_)
+        | Expr::Var(_)
+        | Expr::Call { .. }
+        | Expr::If { .. } => 6,
         Expr::Neg(_) | Expr::Not(_) => 5,
         Expr::Binary { op, .. } => match op {
             BinaryOp::Multiply | BinaryOp::Divide | BinaryOp::Remainder => 4,
@@ -225,13 +287,17 @@ fn render(expr: &Expr) -> String {
             render(then_branch),
             render(else_branch)
         ),
+        Expr::Call { builtin, argument } => format!("{}({})", builtin.name(), render(argument)),
     }
 }
 
 /// Reference evaluation with plain typed values, mirroring the language's
-/// semantics: checked `i64` arithmetic, string concatenation, short-circuiting
-/// logical operators, and `if`/`else` branch selection. Returns `None` when
-/// evaluation fails; callers only compare the Ok/Err decision and, for
+/// semantics: checked `i64` arithmetic, string concatenation, the
+/// fixed-signature builtins (character-count `len`, `Display`-rendered
+/// `int_to_string`, the strict `string_to_int` grammar, and the `bool`/`int`
+/// conversions), short-circuiting logical operators, `if`/`else` branch
+/// selection, and integer or lexicographic string ordering. Returns `None`
+/// when evaluation fails; callers only compare the Ok/Err decision and, for
 /// successes, the value.
 fn reference_eval(expr: &Expr, values: &HashMap<String, RefValue>) -> Option<RefValue> {
     match expr {
@@ -272,6 +338,23 @@ fn reference_eval(expr: &Expr, values: &HashMap<String, RefValue>) -> Option<Ref
             RefValue::Bool(false) => reference_eval(else_branch, values),
             _ => None,
         },
+        Expr::Call { builtin, argument } => {
+            let value = reference_eval(argument, values)?;
+            match (builtin, value) {
+                (Builtin::Len, RefValue::Str(text)) => {
+                    Some(RefValue::Int(text.chars().count() as i64))
+                }
+                (Builtin::IntToString, RefValue::Int(value)) => {
+                    Some(RefValue::Str(value.to_string()))
+                }
+                (Builtin::StringToInt, RefValue::Str(text)) => {
+                    Some(RefValue::Int(parse_reference_integer(&text)?))
+                }
+                (Builtin::BoolToInt, RefValue::Bool(flag)) => Some(RefValue::Int(i64::from(flag))),
+                (Builtin::IntToBool, RefValue::Int(value)) => Some(RefValue::Bool(value != 0)),
+                _ => None,
+            }
+        }
         Expr::Binary { op, left, right } => {
             let left = reference_eval(left, values)?;
             let right = reference_eval(right, values)?;
@@ -295,14 +378,30 @@ fn reference_eval(expr: &Expr, values: &HashMap<String, RefValue>) -> Option<Ref
                         !equal
                     }))
                 }
-                BinaryOp::Subtract
-                | BinaryOp::Multiply
-                | BinaryOp::Divide
-                | BinaryOp::Remainder
-                | BinaryOp::LessThan
+                BinaryOp::LessThan
                 | BinaryOp::LessThanOrEqual
                 | BinaryOp::GreaterThan
                 | BinaryOp::GreaterThanOrEqual => {
+                    // Ordering compares two integers, or two strings
+                    // lexicographically (str Ord), mirroring the language;
+                    // mixed pairings fail like any other type error.
+                    let ordering = match (left, right) {
+                        (RefValue::Int(a), RefValue::Int(b)) => a.cmp(&b),
+                        (RefValue::Str(a), RefValue::Str(b)) => a.cmp(&b),
+                        _ => return None,
+                    };
+                    Some(RefValue::Bool(match op {
+                        BinaryOp::LessThan => ordering.is_lt(),
+                        BinaryOp::LessThanOrEqual => ordering.is_le(),
+                        BinaryOp::GreaterThan => ordering.is_gt(),
+                        BinaryOp::GreaterThanOrEqual => ordering.is_ge(),
+                        _ => unreachable!("handled above"),
+                    }))
+                }
+                BinaryOp::Subtract
+                | BinaryOp::Multiply
+                | BinaryOp::Divide
+                | BinaryOp::Remainder => {
                     let (a, b) = match (left, right) {
                         (RefValue::Int(a), RefValue::Int(b)) => (a, b),
                         _ => return None,
@@ -324,15 +423,40 @@ fn reference_eval(expr: &Expr, values: &HashMap<String, RefValue>) -> Option<Ref
                                 a.checked_rem(b).map(RefValue::Int)
                             }
                         }
-                        BinaryOp::LessThan => Some(RefValue::Bool(a < b)),
-                        BinaryOp::LessThanOrEqual => Some(RefValue::Bool(a <= b)),
-                        BinaryOp::GreaterThan => Some(RefValue::Bool(a > b)),
-                        BinaryOp::GreaterThanOrEqual => Some(RefValue::Bool(a >= b)),
                         _ => unreachable!("handled above"),
                     }
                 }
             }
         }
+    }
+}
+
+/// Reference counterpart of `string_to_int`'s accepted grammar: an optional
+/// leading `-` followed by one or more ASCII digits, with no whitespace, no
+/// `+`, and a magnitude that fits into an `i64` (including the exact
+/// `-9223372036854775808` boundary). Unlike the evaluator, which delegates to
+/// `str::parse`, this folds the digits with checked arithmetic, so agreement
+/// between the two is a real cross-check rather than a shared implementation.
+fn parse_reference_integer(text: &str) -> Option<i64> {
+    let (negative, digits) = match text.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, text),
+    };
+    if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    // Accumulate negated so even the magnitude of `i64::MIN` fits before the
+    // sign is applied; `checked_neg` then rejects the same too-large positive
+    // magnitudes `parse` rejects.
+    let mut accumulated: i64 = 0;
+    for byte in digits.bytes() {
+        let digit = i64::from(byte - b'0');
+        accumulated = accumulated.checked_mul(10)?.checked_sub(digit)?;
+    }
+    if negative {
+        Some(accumulated)
+    } else {
+        accumulated.checked_neg()
     }
 }
 
@@ -354,7 +478,9 @@ fn to_value(value: &RefValue) -> Value {
 
 /// Generates a random expression of the target type and the given depth.
 /// `names` maps declared identifiers to their types; an empty slice means no
-/// variables may be referenced.
+/// variables may be referenced. Interior expressions are sometimes generated
+/// as builtin calls whose result type matches the target, so the builtins
+/// compose with the operator, `let`, and `if` nodes like any other construct.
 fn random_expr(prng: &mut Prng, depth: u32, target: GenType, names: &[(String, GenType)]) -> Expr {
     if depth == 0 || prng.chance(30) {
         // Leaf: a variable of the target type when one exists, otherwise a
@@ -379,40 +505,63 @@ fn random_expr(prng: &mut Prng, depth: u32, target: GenType, names: &[(String, G
     }
 
     match target {
-        GenType::Int => match prng.below(5) {
-            0 => Expr::Neg(Box::new(random_expr(prng, depth - 1, GenType::Int, names))),
-            1 => Expr::Binary {
-                op: int_arithmetic_operator(prng),
-                left: Box::new(random_expr(prng, depth - 1, GenType::Int, names)),
-                right: Box::new(random_expr(prng, depth - 1, GenType::Int, names)),
-            },
-            2 => random_if(prng, depth, GenType::Int, names),
-            _ => random_expr(prng, depth - 1, GenType::Int, names),
-        },
-        GenType::Bool => match prng.below(7) {
-            0 => Expr::Not(Box::new(random_expr(prng, depth - 1, GenType::Bool, names))),
-            1 => Expr::And(
-                Box::new(random_expr(prng, depth - 1, GenType::Bool, names)),
-                Box::new(random_expr(prng, depth - 1, GenType::Bool, names)),
-            ),
-            2 => Expr::Or(
-                Box::new(random_expr(prng, depth - 1, GenType::Bool, names)),
-                Box::new(random_expr(prng, depth - 1, GenType::Bool, names)),
-            ),
-            3 => random_int_comparison(prng, depth, names),
-            4 => random_equality(prng, depth, names),
-            5 => random_if(prng, depth, GenType::Bool, names),
-            _ => random_expr(prng, depth - 1, GenType::Bool, names),
-        },
-        GenType::Str => match prng.below(4) {
-            0 => Expr::Binary {
-                op: BinaryOp::Add,
-                left: Box::new(random_expr(prng, depth - 1, GenType::Str, names)),
-                right: Box::new(random_expr(prng, depth - 1, GenType::Str, names)),
-            },
-            1 => random_if(prng, depth, GenType::Str, names),
-            _ => random_expr(prng, depth - 1, GenType::Str, names),
-        },
+        GenType::Int => {
+            if prng.chance(INT_BUILTIN_CHANCE) {
+                let builtin = match prng.below(3) {
+                    0 => Builtin::Len,
+                    1 => Builtin::StringToInt,
+                    _ => Builtin::BoolToInt,
+                };
+                random_builtin_call(prng, depth, builtin, names)
+            } else {
+                match prng.below(5) {
+                    0 => Expr::Neg(Box::new(random_expr(prng, depth - 1, GenType::Int, names))),
+                    1 => Expr::Binary {
+                        op: int_arithmetic_operator(prng),
+                        left: Box::new(random_expr(prng, depth - 1, GenType::Int, names)),
+                        right: Box::new(random_expr(prng, depth - 1, GenType::Int, names)),
+                    },
+                    2 => random_if(prng, depth, GenType::Int, names),
+                    _ => random_expr(prng, depth - 1, GenType::Int, names),
+                }
+            }
+        }
+        GenType::Bool => {
+            if prng.chance(BOOL_BUILTIN_CHANCE) {
+                random_builtin_call(prng, depth, Builtin::IntToBool, names)
+            } else {
+                match prng.below(7) {
+                    0 => Expr::Not(Box::new(random_expr(prng, depth - 1, GenType::Bool, names))),
+                    1 => Expr::And(
+                        Box::new(random_expr(prng, depth - 1, GenType::Bool, names)),
+                        Box::new(random_expr(prng, depth - 1, GenType::Bool, names)),
+                    ),
+                    2 => Expr::Or(
+                        Box::new(random_expr(prng, depth - 1, GenType::Bool, names)),
+                        Box::new(random_expr(prng, depth - 1, GenType::Bool, names)),
+                    ),
+                    3 => random_ordering_comparison(prng, depth, names),
+                    4 => random_equality(prng, depth, names),
+                    5 => random_if(prng, depth, GenType::Bool, names),
+                    _ => random_expr(prng, depth - 1, GenType::Bool, names),
+                }
+            }
+        }
+        GenType::Str => {
+            if prng.chance(STR_BUILTIN_CHANCE) {
+                random_builtin_call(prng, depth, Builtin::IntToString, names)
+            } else {
+                match prng.below(4) {
+                    0 => Expr::Binary {
+                        op: BinaryOp::Add,
+                        left: Box::new(random_expr(prng, depth - 1, GenType::Str, names)),
+                        right: Box::new(random_expr(prng, depth - 1, GenType::Str, names)),
+                    },
+                    1 => random_if(prng, depth, GenType::Str, names),
+                    _ => random_expr(prng, depth - 1, GenType::Str, names),
+                }
+            }
+        }
     }
 }
 
@@ -426,18 +575,39 @@ fn int_arithmetic_operator(prng: &mut Prng) -> BinaryOp {
     }
 }
 
-/// A `<`, `<=`, `>`, or `>=` comparison of two integers, yielding a boolean.
-fn random_int_comparison(prng: &mut Prng, depth: u32, names: &[(String, GenType)]) -> Expr {
+/// A call to a fixed-signature builtin whose single argument is recursively
+/// generated with the type the builtin demands, so calls nest like any other
+/// node.
+fn random_builtin_call(
+    prng: &mut Prng,
+    depth: u32,
+    builtin: Builtin,
+    names: &[(String, GenType)],
+) -> Expr {
+    Expr::Call {
+        builtin,
+        argument: Box::new(random_expr(prng, depth - 1, builtin.argument_type(), names)),
+    }
+}
+
+/// A `<`, `<=`, `>`, or `>=` comparison of two integers or, half the time, of
+/// two strings compared lexicographically, yielding a boolean.
+fn random_ordering_comparison(prng: &mut Prng, depth: u32, names: &[(String, GenType)]) -> Expr {
     let op = match prng.below(4) {
         0 => BinaryOp::LessThan,
         1 => BinaryOp::LessThanOrEqual,
         2 => BinaryOp::GreaterThan,
         _ => BinaryOp::GreaterThanOrEqual,
     };
+    let operand_type = if prng.chance(50) {
+        GenType::Int
+    } else {
+        GenType::Str
+    };
     Expr::Binary {
         op,
-        left: Box::new(random_expr(prng, depth - 1, GenType::Int, names)),
-        right: Box::new(random_expr(prng, depth - 1, GenType::Int, names)),
+        left: Box::new(random_expr(prng, depth - 1, operand_type, names)),
+        right: Box::new(random_expr(prng, depth - 1, operand_type, names)),
     }
 }
 
@@ -555,4 +725,24 @@ fn programs_match_reference_model() {
         let expected = reference_program(&program);
         assert_agrees(&source, expected);
     }
+}
+
+/// Pins the hand-rolled reference parser to `string_to_int`'s grammar at the
+/// boundaries the random generator may not reach within a given seed.
+#[test]
+fn reference_integer_parser_tracks_the_builtin_grammar() {
+    assert_eq!(parse_reference_integer("0"), Some(0));
+    assert_eq!(parse_reference_integer("007"), Some(7));
+    assert_eq!(parse_reference_integer("-7"), Some(-7));
+    assert_eq!(parse_reference_integer("-0"), Some(0));
+    assert_eq!(parse_reference_integer("9223372036854775807"), Some(i64::MAX));
+    assert_eq!(parse_reference_integer("-9223372036854775808"), Some(i64::MIN));
+    assert_eq!(parse_reference_integer(""), None);
+    assert_eq!(parse_reference_integer("-"), None);
+    assert_eq!(parse_reference_integer("+5"), None);
+    assert_eq!(parse_reference_integer(" 12"), None);
+    assert_eq!(parse_reference_integer("12 "), None);
+    assert_eq!(parse_reference_integer("1a"), None);
+    assert_eq!(parse_reference_integer("9223372036854775808"), None);
+    assert_eq!(parse_reference_integer("-9223372036854775809"), None);
 }

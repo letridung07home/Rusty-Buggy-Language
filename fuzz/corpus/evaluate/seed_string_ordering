@@ -1,0 +1,1 @@
+let less = "apple" < "banana"; let caps = "Z" < "a"; less && caps
