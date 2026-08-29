@@ -826,13 +826,7 @@ fn check_binary(
                 (Type::Int, "integers")
             };
             require_two(
-                left_flow,
-                right_flow,
-                required,
-                family,
-                symbol,
-                position,
-                signatures,
+                left_flow, right_flow, required, family, symbol, position, signatures,
             )?;
             Ok(Flow::Concrete(Type::Bool))
         }

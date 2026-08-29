@@ -735,8 +735,14 @@ fn reference_integer_parser_tracks_the_builtin_grammar() {
     assert_eq!(parse_reference_integer("007"), Some(7));
     assert_eq!(parse_reference_integer("-7"), Some(-7));
     assert_eq!(parse_reference_integer("-0"), Some(0));
-    assert_eq!(parse_reference_integer("9223372036854775807"), Some(i64::MAX));
-    assert_eq!(parse_reference_integer("-9223372036854775808"), Some(i64::MIN));
+    assert_eq!(
+        parse_reference_integer("9223372036854775807"),
+        Some(i64::MAX)
+    );
+    assert_eq!(
+        parse_reference_integer("-9223372036854775808"),
+        Some(i64::MIN)
+    );
     assert_eq!(parse_reference_integer(""), None);
     assert_eq!(parse_reference_integer("-"), None);
     assert_eq!(parse_reference_integer("+5"), None);

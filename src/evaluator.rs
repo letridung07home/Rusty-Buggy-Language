@@ -1177,7 +1177,16 @@ mod tests {
 
     #[test]
     fn string_to_int_rejects_invalid_text() {
-        for text in ["", "-", "+5", " 5", "5 ", "12.5", "abc", "9223372036854775808"] {
+        for text in [
+            "",
+            "-",
+            "+5",
+            " 5",
+            "5 ",
+            "12.5",
+            "abc",
+            "9223372036854775808",
+        ] {
             let source = format!("string_to_int(\"{text}\")");
             assert_eq!(
                 error_message(&source),
