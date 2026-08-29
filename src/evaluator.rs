@@ -91,7 +91,10 @@ fn evaluate_expression(
     *eval_depth += 1;
     if *eval_depth > MAX_EVAL_DEPTH {
         *eval_depth -= 1;
-        return Err(positioned_error("program too deeply nested", expression.position()));
+        return Err(positioned_error(
+            "program too deeply nested",
+            expression.position(),
+        ));
     }
 
     let result = match expression {
@@ -160,9 +163,8 @@ fn evaluate_expression(
             position,
         } => {
             let left_value = evaluate_expression(left, functions, scopes, call_depth, eval_depth)?;
-            let right_value = evaluate_expression(
-                right, functions, scopes, call_depth, eval_depth,
-            )?;
+            let right_value =
+                evaluate_expression(right, functions, scopes, call_depth, eval_depth)?;
             evaluate_binary(*operator, left_value, right_value, *position)
         }
         Expression::LogicalAnd {
@@ -239,9 +241,8 @@ fn evaluate_expression(
             else_branch,
             position,
         } => {
-            let condition_value = evaluate_expression(
-                condition, functions, scopes, call_depth, eval_depth,
-            )?;
+            let condition_value =
+                evaluate_expression(condition, functions, scopes, call_depth, eval_depth)?;
             let condition_bool = match condition_value {
                 Value::Bool(value) => value,
                 other => {
@@ -518,6 +519,16 @@ mod tests {
 
     fn error_message(input: &str) -> String {
         evaluate_source(input).unwrap_err().to_string()
+    }
+
+    // Debug test threads default to a small stack; the guard legitimately allows ~2048 frames.
+    fn error_message_on_large_stack(source: String) -> String {
+        std::thread::Builder::new()
+            .stack_size(32 * 1024 * 1024)
+            .spawn(move || error_message(&source))
+            .expect("test thread spawned")
+            .join()
+            .expect("test thread did not panic")
     }
 
     #[test]
@@ -983,7 +994,7 @@ mod tests {
         let mut source = String::from("fn s()={");
         source.push_str(&"-".repeat(100));
         source.push_str("s()-8};s()-7");
-        assert_eq!(error_message(&source), "program too deeply nested");
+        assert_eq!(error_message_on_large_stack(source), "program too deeply nested");
     }
 
     #[test]
@@ -993,8 +1004,8 @@ mod tests {
         // `s()-8};s()-7`. Before the evaluation-depth guard this overflowed
         // the stack under ASan; the guard now trips at ~44 calls, well before
         // the 128-call limit and before any stack exhaustion.
-        let source = "fn\ns()={--------------------------------------------s()-8};s()-7";
-        assert_eq!(error_message(source), "program too deeply nested");
+        let source = "fn\ns()={--------------------------------------------s()-8};s()-7".to_owned();
+        assert_eq!(error_message_on_large_stack(source), "program too deeply nested");
     }
 
     #[test]
@@ -1006,6 +1017,6 @@ mod tests {
         let mut source = String::from("fn s()={ if true { ");
         source.push_str(&"-".repeat(100));
         source.push_str("s()-8 } else { 0 } }; s()");
-        assert_eq!(error_message(&source), "program too deeply nested");
+        assert_eq!(error_message_on_large_stack(source), "program too deeply nested");
     }
 }
