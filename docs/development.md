@@ -57,13 +57,17 @@ source selection and complete UTF-8 input read
   same scope stack, performs checked `i64` arithmetic, concatenates strings,
   short-circuits `&&`/`||`, and selects `if`/`else` branches, attaching the
   relevant node's position to evaluation errors.
-- Resource limits live on the parser and the library entry point. The parser
-  bounds recursive nesting (parentheses, prefix `-`/`!` chains, and nested
-  `if`/`else` blocks) with a `depth` counter, reporting `program too deeply
-  nested`; the library entry points enforce the byte-length input limit from
-  `Limits` before lexing. Positions are always tracked internally, but CLI
-  output only shows them when the `--positions` flag is passed, keeping the
-  default error text stable.
+- Resource limits live on the parser, the evaluator, and the library entry
+  point. The parser bounds recursive nesting (parentheses, prefix `-`/`!`
+  chains, and nested `if`/`else` blocks) with a `depth` counter, reporting
+  `program too deeply nested`; the library entry points enforce the
+  byte-length input limit from `Limits` before lexing. The evaluator adds an
+  evaluation-depth guard (`MAX_EVAL_DEPTH`): stack cost is call depth times
+  per-call expression descent, so it bounds total expression-evaluation depth
+  at 2048 levels and reports the same `program too deeply nested` message with
+  the offending expression's position. Positions are always tracked
+  internally, but CLI output only shows them when the `--positions` flag is
+  passed, keeping the default error text stable.
 - `src/main.rs` only supplies process arguments and delegates the exit code.
 - Unit tests next to each pipeline stage cover lexical, syntax, and evaluation
   behavior. Library-facade tests cover the public API and error display.
