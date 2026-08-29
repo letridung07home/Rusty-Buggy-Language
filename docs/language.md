@@ -164,8 +164,13 @@ let greeting = "hello" + " " + "world";  // "hello world"
 let same = greeting == "hello world";    // true
 ```
 
-String ordering comparisons (`<`, `<=`, `>`, `>=`) are not yet supported;
-they are planned for a later v2 release.
+The ordering comparisons `<`, `<=`, `>`, and `>=` also compare two strings,
+lexicographically by Unicode scalar value:
+
+```text
+let first = "apple" < "banana";    // true
+let same = "a" <= "a";             // true
+```
 
 ## if/else expressions
 
@@ -248,6 +253,38 @@ position. Deep but terminating recursion (for example `factorial(120)`)
 remains fine; the limit only rejects programs whose combined depth would
 exhaust the stack.
 
+## Standard library functions
+
+Five built-in functions are always available with fixed signatures:
+
+| Function | Signature | Behavior |
+| --- | --- | --- |
+| `len` | `len(String) -> Int` | The number of characters in the string, counted as Unicode scalar values rather than UTF-8 bytes. |
+| `int_to_string` | `int_to_string(Int) -> String` | The integer's decimal text, exactly as the CLI prints it. |
+| `string_to_int` | `string_to_int(String) -> Int` | Parses the decimal text produced by `int_to_string` back into an integer. |
+| `bool_to_int` | `bool_to_int(Bool) -> Int` | `1` for `true` and `0` for `false`. |
+| `int_to_bool` | `int_to_bool(Int) -> Bool` | `false` for `0` and `true` for any other integer. |
+
+`string_to_int` accepts only an optional leading `-` followed by one or more
+ASCII decimal digits:
+
+```text
+builtin_integer_text ::= "-"? digit+
+```
+
+Leading zeros are accepted, while whitespace, a leading `+`, an empty string,
+a lone `-`, and magnitudes outside the signed 64-bit range are rejected with
+the positioned error `invalid integer text: '<text>'` at the call site; for
+example, `string_to_int(" 12")` and `string_to_int("+1")` are errors, while
+`string_to_int(int_to_string(n))` round-trips every integer.
+
+Builtins are recognized by name and are not ordinary values. A user function
+cannot take a builtin's name, so `fn len(s) = { 0 };` reports `duplicate
+function declaration: 'len'`, and a bare builtin name outside a call (for
+example `len` alone) remains an undefined-variable error. Builtins have no
+user-visible body, so they cannot recurse, and a builtin call consumes no
+call depth: it never contributes to `call depth limit exceeded`.
+
 ## Declarations and evaluation
 
 Declarations are evaluated from left to right and bind an immutable value:
@@ -270,7 +307,8 @@ ill-typed programs with a positioned error. The type rules are:
 
 - `+` accepts two integers (adding) or two strings (concatenating).
 - `-`, `*`, `/`, and `%` accept two integers.
-- `<`, `<=`, `>`, and `>=` accept two integers and produce a boolean.
+- `<`, `<=`, `>`, and `>=` accept two integers (compared numerically) or two
+  strings (compared lexicographically) and produce a boolean.
 - `==` and `!=` accept two values of the same type and produce a boolean.
 - `&&` and `||` accept two booleans and produce a boolean.
 - prefix `-` accepts an integer; prefix `!` accepts a boolean.
@@ -344,6 +382,8 @@ standard error, prints no result, and exits unsuccessfully. Errors include:
 - undefined or forward-referenced variables and duplicate declarations;
 - undefined functions, wrong argument counts, and mismatched argument types
   at call sites;
+- a `string_to_int` argument that does not match the accepted integer text,
+  reported as `invalid integer text: '<text>'`;
 - function parameters or results whose types cannot be inferred from any body
   or call site;
 - type errors such as mixing operands of different types, a non-boolean `if`

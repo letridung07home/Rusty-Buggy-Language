@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added five built-in functions: `len(s)` returns the number of Unicode
+  scalar values in a string (characters, not UTF-8 bytes); `int_to_string(n)`
+  returns an integer's decimal text; `string_to_int(s)` parses that text
+  back — an optional leading `-` followed by one or more ASCII decimal
+  digits, no whitespace or `+`, and a magnitude that fits in 64 bits —
+  reporting the positioned error `invalid integer text: '<text>'` at the
+  call for anything else; `bool_to_int(b)` maps `true`/`false` to `1`/`0`;
+  and `int_to_bool(n)` maps `0` to `false` and any other integer to `true`.
+- The ordering comparisons `<`, `<=`, `>`, and `>=` now also compare two
+  strings lexicographically by Unicode scalar value; they previously
+  accepted only two integers.
+- Declaring a user function with a built-in's name (for example
+  `fn len(s) = { 0 };`) is rejected with `duplicate function declaration:
+  '<name>'`, so the builtins keep their fixed signatures. Builtins cannot
+  be referenced as values (a bare `len` remains an undefined variable), and
+  a builtin call consumes no call depth.
+- Added `examples/stdlib.rbl` plus language-reference and tutorial sections
+  covering the builtins and string ordering.
+
 ## [2.2.1] - 2026-08-29
 
 ### Fixed

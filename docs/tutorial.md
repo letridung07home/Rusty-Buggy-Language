@@ -184,6 +184,41 @@ local variables that stay inside the call. Calling an undefined function, using
 the wrong number of arguments, or passing a value of the wrong type is a
 type error reported before evaluation.
 
+## Standard library functions
+
+Five built-in functions cover common string and number conversions:
+
+```bash
+cargo run -- "len(\"hello\")"
+# 5
+
+cargo run -- "int_to_string(-12) + \"!\""
+# -12!
+
+cargo run -- "string_to_int(\"42\") + 1"
+# 43
+
+cargo run -- "bool_to_int(3 > 2)"
+# 1
+
+cargo run -- "int_to_bool(0)"
+# false
+```
+
+`len` counts characters (Unicode scalar values), not UTF-8 bytes, so
+`len("héllo")` is `5`. `string_to_int` accepts only an optional leading `-`
+followed by ASCII digits — leading zeros included — and reports
+`invalid integer text: '...'` for anything else, such as
+`string_to_int(" 42")` or `string_to_int("+1")`. The two are inverses, so
+`string_to_int(int_to_string(7))` is `7`.
+
+The ordering comparisons also compare strings lexicographically:
+
+```bash
+cargo run -- "\"apple\" < \"banana\""
+# true
+```
+
 ## Example programs
 
 The `examples/` directory contains runnable programs for each feature:
@@ -195,6 +230,7 @@ The `examples/` directory contains runnable programs for each feature:
 - `branching.rbl` — `if`/`else` with scoped declarations.
 - `functions.rbl` — function declarations, calls, and block bodies.
 - `recursion.rbl` — recursion and mutual recursion.
+- `stdlib.rbl` — the built-in functions and string ordering.
 - `fahrenheit.rbl` — an inline conversion.
 - `session.rbl` — a multi-step immutable-binding program.
 
