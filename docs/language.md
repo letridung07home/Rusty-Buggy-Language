@@ -52,13 +52,17 @@ Two optional configuration flags may appear alongside an inline program, a
 
 ## Resource limits
 
-The evaluator applies two built-in limits so that adversarial or oversized
+The evaluator applies three built-in limits so that adversarial or oversized
 input reports a clear error instead of exhausting memory or the call stack.
 
 - **Nesting depth.** Parenthesized expressions, chains of prefix `-`/`!`, and
   nested `if`/`else` blocks may not nest deeper than 128 levels. Exceeding the
   limit reports `program too deeply nested`. Ordinary programs (even with heavy
   parentheses) are well below this.
+- **Evaluation depth.** Expression evaluation may not exceed a total depth of
+  2048 levels. Stack usage grows as call depth times expression nesting, so
+  this limit bounds their product; exceeding it reports `program too deeply
+  nested` with the offending expression's position.
 - **Input size.** A program is rejected with `program is too large to
   evaluate` when it is longer than the configured input limit. The default is
   `1 MiB`; the CLI `--input-limit <bytes>` flag overrides it for one
@@ -233,6 +237,17 @@ programs that nest calls deeper than 128 levels with `call depth limit
 exceeded`. Deep but terminating recursion (for example `factorial(120)`) is
 fine; runaway recursion reports a clear error instead of overflowing the stack.
 
+### Evaluation-depth guard
+
+Stack usage grows as call depth times the expression nesting inside each
+called function, so a program can exhaust the stack even when its call depth
+and expression nesting are each legal on their own. The evaluator therefore
+also bounds total expression-evaluation depth at 2048 levels; exceeding that
+bound reports `program too deeply nested` with the offending expression's
+position. Deep but terminating recursion (for example `factorial(120)`)
+remains fine; the limit only rejects programs whose combined depth would
+exhaust the stack.
+
 ## Declarations and evaluation
 
 Declarations are evaluated from left to right and bind an immutable value:
@@ -338,8 +353,9 @@ standard error, prints no result, and exits unsuccessfully. Errors include:
 - division by zero and modulo by zero;
 - a source program longer than the configured input limit;
 - expressions or prefix `-`/`!` chains nested more deeply than the nesting
-  limit; and
-- function calls nested more deeply than the call-depth limit.
+  limit;
+- function calls nested more deeply than the call-depth limit; and
+- expression evaluation deeper than the evaluation-depth limit.
 
 When `--positions` is supplied, the CLI appends ` at line L, column C` to the
 error so the failure can be located in the source.

@@ -12,15 +12,28 @@ use crate::Value;
 /// language's "clear error instead of crash" hardening posture.
 const MAX_CALL_DEPTH: usize = 128;
 
+/// The maximum depth of nested expression evaluation the evaluator allows before
+/// reporting a clear error. Each `evaluate_expression` level costs an AST-descent
+/// frame on top of the call-depth guard above, so a pathological expression
+/// (issue #13: a 44-deep unary-minus chain inside a recursive function body) can
+/// exhaust the stack long before `MAX_CALL_DEPTH` trips. 2048 levels at a
+/// worst-case ~2 KB sanitizer-inflated frame is ~4 MB, half of an 8 MB stack,
+/// while still admitting roughly twice the deepest legitimate program (a
+/// 128-call factorial recursion costs ~1.2k frames). The reported message
+/// mirrors the parser's nesting-depth limit.
+const MAX_EVAL_DEPTH: usize = 2048;
+
 pub(crate) fn evaluate(program: &Program, functions: &ResolvedFunctions) -> Result<Value, Error> {
     let mut scopes = vec![HashMap::new()];
     let mut call_depth = 0_usize;
+    let mut eval_depth = 0_usize;
     evaluate_body(
         &program.declarations,
         &program.expression,
         functions,
         &mut scopes,
         &mut call_depth,
+        &mut eval_depth,
     )
 }
 
@@ -32,13 +45,20 @@ fn evaluate_body(
     functions: &ResolvedFunctions,
     scopes: &mut Vec<HashMap<String, Value>>,
     call_depth: &mut usize,
+    eval_depth: &mut usize,
 ) -> Result<Value, Error> {
     for declaration in declarations {
-        let value = evaluate_expression(&declaration.initializer, functions, scopes, call_depth)?;
+        let value = evaluate_expression(
+            &declaration.initializer,
+            functions,
+            scopes,
+            call_depth,
+            eval_depth,
+        )?;
         let current = scopes.last_mut().expect("the scope stack is never empty");
         current.insert(declaration.name.clone(), value);
     }
-    evaluate_expression(expression, functions, scopes, call_depth)
+    evaluate_expression(expression, functions, scopes, call_depth, eval_depth)
 }
 
 fn evaluate_block(
@@ -46,6 +66,7 @@ fn evaluate_block(
     functions: &ResolvedFunctions,
     scopes: &mut Vec<HashMap<String, Value>>,
     call_depth: &mut usize,
+    eval_depth: &mut usize,
 ) -> Result<Value, Error> {
     scopes.push(HashMap::new());
     let result = evaluate_body(
@@ -54,6 +75,7 @@ fn evaluate_block(
         functions,
         scopes,
         call_depth,
+        eval_depth,
     );
     scopes.pop();
     result
@@ -64,54 +86,63 @@ fn evaluate_expression(
     functions: &ResolvedFunctions,
     scopes: &mut Vec<HashMap<String, Value>>,
     call_depth: &mut usize,
+    eval_depth: &mut usize,
 ) -> Result<Value, Error> {
-    match expression {
+    *eval_depth += 1;
+    if *eval_depth > MAX_EVAL_DEPTH {
+        *eval_depth -= 1;
+        return Err(positioned_error("program too deeply nested", expression.position()));
+    }
+
+    let result = match expression {
         Expression::Literal { value, position } => i64::try_from(*value)
             .map(Value::Int)
             .map_err(|_| positioned_error("integer literal out of range", *position)),
         Expression::StringLiteral { value, .. } => Ok(Value::String(value.clone())),
         Expression::BoolLiteral { value, .. } => Ok(Value::Bool(*value)),
         Expression::Variable { name, position } => {
-            for scope in scopes.iter().rev() {
-                if let Some(value) = scope.get(name) {
-                    return Ok(value.clone());
-                }
+            match scopes.iter().rev().find_map(|s| s.get(name).cloned()) {
+                Some(value) => Ok(value),
+                None => Err(positioned_error(
+                    format!("undefined variable: '{name}'"),
+                    *position,
+                )),
             }
-            Err(positioned_error(
-                format!("undefined variable: '{name}'"),
-                *position,
-            ))
         }
         Expression::Call {
             callee,
             arguments,
             position,
-        } => evaluate_call(callee, arguments, *position, functions, scopes, call_depth),
+        } => evaluate_call(
+            callee, arguments, *position, functions, scopes, call_depth, eval_depth,
+        ),
         Expression::UnaryNegation { operand, position } => {
             // The magnitude 2^63 has no unnegated representation; a literal of
             // that magnitude is only valid under an immediately applied `-`.
-            if let Expression::Literal { value, .. } = operand.as_ref() {
-                if *value == (i64::MAX as u64) + 1 {
-                    return Ok(Value::Int(i64::MIN));
+            let is_i64_min = matches!(
+                operand.as_ref(),
+                Expression::Literal { value, .. } if *value == (i64::MAX as u64) + 1
+            );
+            if is_i64_min {
+                Ok(Value::Int(i64::MIN))
+            } else {
+                match evaluate_expression(operand, functions, scopes, call_depth, eval_depth)? {
+                    Value::Int(value) => value
+                        .checked_neg()
+                        .map(Value::Int)
+                        .ok_or_else(|| positioned_error("integer negation overflow", *position)),
+                    other => Err(positioned_error(
+                        format!(
+                            "type mismatch in '-': expected an integer, found {}",
+                            value_type_name(&other)
+                        ),
+                        *position,
+                    )),
                 }
-            }
-
-            match evaluate_expression(operand, functions, scopes, call_depth)? {
-                Value::Int(value) => value
-                    .checked_neg()
-                    .map(Value::Int)
-                    .ok_or_else(|| positioned_error("integer negation overflow", *position)),
-                other => Err(positioned_error(
-                    format!(
-                        "type mismatch in '-': expected an integer, found {}",
-                        value_type_name(&other)
-                    ),
-                    *position,
-                )),
             }
         }
         Expression::UnaryNot { operand, position } => {
-            match evaluate_expression(operand, functions, scopes, call_depth)? {
+            match evaluate_expression(operand, functions, scopes, call_depth, eval_depth)? {
                 Value::Bool(value) => Ok(Value::Bool(!value)),
                 other => Err(positioned_error(
                     format!(
@@ -128,8 +159,10 @@ fn evaluate_expression(
             right,
             position,
         } => {
-            let left_value = evaluate_expression(left, functions, scopes, call_depth)?;
-            let right_value = evaluate_expression(right, functions, scopes, call_depth)?;
+            let left_value = evaluate_expression(left, functions, scopes, call_depth, eval_depth)?;
+            let right_value = evaluate_expression(
+                right, functions, scopes, call_depth, eval_depth,
+            )?;
             evaluate_binary(*operator, left_value, right_value, *position)
         }
         Expression::LogicalAnd {
@@ -137,7 +170,7 @@ fn evaluate_expression(
             right,
             position,
         } => {
-            let left_value = evaluate_expression(left, functions, scopes, call_depth)?;
+            let left_value = evaluate_expression(left, functions, scopes, call_depth, eval_depth)?;
             let left_bool = match left_value {
                 Value::Bool(value) => value,
                 other => {
@@ -152,17 +185,18 @@ fn evaluate_expression(
             };
             if !left_bool {
                 // Short-circuit: the right operand must not be evaluated.
-                return Ok(Value::Bool(false));
-            }
-            match evaluate_expression(right, functions, scopes, call_depth)? {
-                Value::Bool(value) => Ok(Value::Bool(value)),
-                other => Err(positioned_error(
-                    format!(
-                        "type mismatch in '&&': expected a boolean, found {}",
-                        value_type_name(&other)
-                    ),
-                    *position,
-                )),
+                Ok(Value::Bool(false))
+            } else {
+                match evaluate_expression(right, functions, scopes, call_depth, eval_depth)? {
+                    Value::Bool(value) => Ok(Value::Bool(value)),
+                    other => Err(positioned_error(
+                        format!(
+                            "type mismatch in '&&': expected a boolean, found {}",
+                            value_type_name(&other)
+                        ),
+                        *position,
+                    )),
+                }
             }
         }
         Expression::LogicalOr {
@@ -170,7 +204,7 @@ fn evaluate_expression(
             right,
             position,
         } => {
-            let left_value = evaluate_expression(left, functions, scopes, call_depth)?;
+            let left_value = evaluate_expression(left, functions, scopes, call_depth, eval_depth)?;
             let left_bool = match left_value {
                 Value::Bool(value) => value,
                 other => {
@@ -185,17 +219,18 @@ fn evaluate_expression(
             };
             if left_bool {
                 // Short-circuit: the right operand must not be evaluated.
-                return Ok(Value::Bool(true));
-            }
-            match evaluate_expression(right, functions, scopes, call_depth)? {
-                Value::Bool(value) => Ok(Value::Bool(value)),
-                other => Err(positioned_error(
-                    format!(
-                        "type mismatch in '||': expected a boolean, found {}",
-                        value_type_name(&other)
-                    ),
-                    *position,
-                )),
+                Ok(Value::Bool(true))
+            } else {
+                match evaluate_expression(right, functions, scopes, call_depth, eval_depth)? {
+                    Value::Bool(value) => Ok(Value::Bool(value)),
+                    other => Err(positioned_error(
+                        format!(
+                            "type mismatch in '||': expected a boolean, found {}",
+                            value_type_name(&other)
+                        ),
+                        *position,
+                    )),
+                }
             }
         }
         Expression::If {
@@ -204,7 +239,9 @@ fn evaluate_expression(
             else_branch,
             position,
         } => {
-            let condition_value = evaluate_expression(condition, functions, scopes, call_depth)?;
+            let condition_value = evaluate_expression(
+                condition, functions, scopes, call_depth, eval_depth,
+            )?;
             let condition_bool = match condition_value {
                 Value::Bool(value) => value,
                 other => {
@@ -219,12 +256,15 @@ fn evaluate_expression(
             };
 
             if condition_bool {
-                evaluate_block(then_branch, functions, scopes, call_depth)
+                evaluate_block(then_branch, functions, scopes, call_depth, eval_depth)
             } else {
-                evaluate_block(else_branch, functions, scopes, call_depth)
+                evaluate_block(else_branch, functions, scopes, call_depth, eval_depth)
             }
         }
-    }
+    };
+
+    *eval_depth -= 1;
+    result
 }
 
 /// Evaluates a function call: resolves the callee, evaluates the arguments,
@@ -238,6 +278,7 @@ fn evaluate_call(
     functions: &ResolvedFunctions,
     scopes: &mut Vec<HashMap<String, Value>>,
     call_depth: &mut usize,
+    eval_depth: &mut usize,
 ) -> Result<Value, Error> {
     let function = functions
         .get(callee)
@@ -257,7 +298,7 @@ fn evaluate_call(
     let mut argument_values = Vec::with_capacity(arguments.len());
     for argument in arguments {
         argument_values.push(evaluate_expression(
-            argument, functions, scopes, call_depth,
+            argument, functions, scopes, call_depth, eval_depth,
         )?);
     }
 
@@ -296,6 +337,7 @@ fn evaluate_call(
         functions,
         scopes,
         call_depth,
+        eval_depth,
     );
     scopes.pop();
     *call_depth -= 1;
@@ -927,5 +969,43 @@ mod tests {
         // type-checks: `count(n)` is an integer.
         let source = "fn count(n) = { if n == 0 { n } else { count(n - 1) } }; count(2000)";
         assert_eq!(error_message(source), "call depth limit exceeded");
+    }
+
+    #[test]
+    fn deep_body_recursion_hits_the_evaluation_depth_guard() {
+        // Issue #13 class: a recursive body whose expression nesting is deep
+        // costs call-depth x body-depth evaluator frames, so without the
+        // evaluation-depth guard this shape burned call-depth x body-depth
+        // stack frames on its way to reporting `call depth limit exceeded`.
+        // The 100 unary minuses are parser-legal (the parser's nesting limit
+        // is 128), so the evaluation-depth guard must be the one to fire, with
+        // the parser's nesting message.
+        let mut source = String::from("fn s()={");
+        source.push_str(&"-".repeat(100));
+        source.push_str("s()-8};s()-7");
+        assert_eq!(error_message(&source), "program too deeply nested");
+    }
+
+    #[test]
+    fn issue_13_fuzz_crash_input_reports_a_clean_error() {
+        // The exact 64-byte program from the nightly ASan fuzz run reported in
+        // GitHub issue #13: `fn`, newline, `s()={`, 44 minus signs,
+        // `s()-8};s()-7`. Before the evaluation-depth guard this overflowed
+        // the stack under ASan; the guard now trips at ~44 calls, well before
+        // the 128-call limit and before any stack exhaustion.
+        let source = "fn\ns()={--------------------------------------------s()-8};s()-7";
+        assert_eq!(error_message(source), "program too deeply nested");
+    }
+
+    #[test]
+    fn deep_if_block_recursion_hits_the_evaluation_depth_guard() {
+        // The issue #13 shape again, but with the recursion hidden inside an
+        // if/else block: the branch descent adds evaluator frames on top of
+        // the unary-minus chain, so the evaluation-depth guard must still fire
+        // with the same clean nesting error.
+        let mut source = String::from("fn s()={ if true { ");
+        source.push_str(&"-".repeat(100));
+        source.push_str("s()-8 } else { 0 } }; s()");
+        assert_eq!(error_message(&source), "program too deeply nested");
     }
 }

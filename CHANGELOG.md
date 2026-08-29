@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed a stack overflow found by the nightly fuzz workflow (GitHub issue
+  #13): a program combining deep recursion with a long prefix `-` chain (a
+  recursive call guarded by 44 unary minuses) exhausted the stack, because
+  stack cost grows as call depth times the per-call expression descent even
+  when each alone stays within its own limit. The evaluator now also bounds
+  total expression-evaluation depth at 2048 levels; exceeding it reports the
+  existing `program too deeply nested` message with the expression's
+  position. Regression tests and a fuzz corpus seed cover the crashing
+  input.
+
 ## [2.2.0] - 2026-08-28
 
 ### Added
