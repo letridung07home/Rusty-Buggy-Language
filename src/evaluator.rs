@@ -994,7 +994,10 @@ mod tests {
         let mut source = String::from("fn s()={");
         source.push_str(&"-".repeat(100));
         source.push_str("s()-8};s()-7");
-        assert_eq!(error_message_on_large_stack(source), "program too deeply nested");
+        assert_eq!(
+            error_message_on_large_stack(source),
+            "program too deeply nested"
+        );
     }
 
     #[test]
@@ -1005,7 +1008,10 @@ mod tests {
         // the stack under ASan; the guard now trips at ~44 calls, well before
         // the 128-call limit and before any stack exhaustion.
         let source = "fn\ns()={--------------------------------------------s()-8};s()-7".to_owned();
-        assert_eq!(error_message_on_large_stack(source), "program too deeply nested");
+        assert_eq!(
+            error_message_on_large_stack(source),
+            "program too deeply nested"
+        );
     }
 
     #[test]
@@ -1017,6 +1023,9 @@ mod tests {
         let mut source = String::from("fn s()={ if true { ");
         source.push_str(&"-".repeat(100));
         source.push_str("s()-8 } else { 0 } }; s()");
-        assert_eq!(error_message_on_large_stack(source), "program too deeply nested");
+        assert_eq!(
+            error_message_on_large_stack(source),
+            "program too deeply nested"
+        );
     }
 }
