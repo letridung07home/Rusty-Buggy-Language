@@ -1198,4 +1198,78 @@ mod tests {
                 .contains("cannot infer")
         );
     }
+
+    // --- Stdlib builtins and string ordering ---
+
+    #[test]
+    fn rejects_redeclaring_a_builtin_as_a_user_function() {
+        assert_eq!(
+            check_error("fn len() = { 0 }; 1"),
+            "duplicate function declaration: 'len'"
+        );
+        assert_eq!(
+            check_error("fn int_to_string() = { \"\" }; 1"),
+            "duplicate function declaration: 'int_to_string'"
+        );
+    }
+
+    #[test]
+    fn rejects_builtin_calls_with_the_wrong_argument_count() {
+        assert_eq!(
+            check_error("len(\"a\", \"b\")"),
+            "wrong number of arguments for function 'len': expected 1, found 2"
+        );
+        assert_eq!(
+            check_error("string_to_int()"),
+            "wrong number of arguments for function 'string_to_int': expected 1, found 0"
+        );
+    }
+
+    #[test]
+    fn rejects_builtin_calls_with_mismatched_argument_types() {
+        assert_eq!(
+            check_error("len(1)"),
+            "type mismatch in call to 'len': expected argument 1 to be string, found integer"
+        );
+        assert_eq!(
+            check_error("int_to_string(\"a\")"),
+            "type mismatch in call to 'int_to_string': expected argument 1 to be integer, found string"
+        );
+        assert_eq!(
+            check_error("bool_to_int(1)"),
+            "type mismatch in call to 'bool_to_int': expected argument 1 to be boolean, found integer"
+        );
+        assert_eq!(
+            check_error("int_to_bool(true)"),
+            "type mismatch in call to 'int_to_bool': expected argument 1 to be integer, found boolean"
+        );
+    }
+
+    #[test]
+    fn builtin_calls_pin_unknown_parameter_types() {
+        // The `len(x)` demand pins `x` to string, so the string call site
+        // type-checks while a later integer call site conflicts with the
+        // pinned signature.
+        accepts("fn f(x) = { len(x) }; f(\"ab\")");
+        assert_eq!(
+            check_error("fn f(x) = { len(x) }; f(1)"),
+            "type mismatch in call to 'f': expected argument 1 to be string, found integer"
+        );
+        // A builtin argument demand pins through any pass-through parameter.
+        accepts("fn f(x) = { string_to_int(x) }; f(\"42\")");
+    }
+
+    #[test]
+    fn ordering_accepts_two_strings_and_rejects_mixed_operands() {
+        accepts("\"a\" < \"b\"");
+        accepts("\"a\" <= \"b\" && \"b\" >= \"a\"");
+        assert_eq!(
+            check_error("\"a\" < 1"),
+            "type mismatch in '<': expected two strings, found string and integer"
+        );
+        assert_eq!(
+            check_error("1 > \"a\""),
+            "type mismatch in '>': expected two strings, found integer and string"
+        );
+    }
 }

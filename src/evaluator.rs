@@ -1144,4 +1144,74 @@ mod tests {
             "program too deeply nested"
         );
     }
+
+    // --- Stdlib builtins and string ordering ---
+
+    #[test]
+    fn evaluates_the_len_builtin_over_string_characters() {
+        assert_eq!(evaluate_source("len(\"\")"), Ok(int(0)));
+        assert_eq!(evaluate_source("len(\"hello\")"), Ok(int(5)));
+        // len counts characters, not bytes: "héllo" is 5 chars over 6 bytes.
+        assert_eq!(evaluate_source("len(\"héllo\")"), Ok(int(5)));
+    }
+
+    #[test]
+    fn evaluates_the_int_to_string_builtin() {
+        assert_eq!(evaluate_source("int_to_string(0)"), Ok(string("0")));
+        assert_eq!(evaluate_source("int_to_string(42)"), Ok(string("42")));
+        assert_eq!(evaluate_source("int_to_string(-5)"), Ok(string("-5")));
+    }
+
+    #[test]
+    fn evaluates_the_string_to_int_builtin() {
+        assert_eq!(evaluate_source("string_to_int(\"0\")"), Ok(int(0)));
+        assert_eq!(evaluate_source("string_to_int(\"-7\")"), Ok(int(-7)));
+        // Leading zeros are accepted and normalized.
+        assert_eq!(evaluate_source("string_to_int(\"007\")"), Ok(int(7)));
+        // The signed minimum fits even though its magnitude does not.
+        assert_eq!(
+            evaluate_source("string_to_int(\"-9223372036854775808\")"),
+            Ok(int(i64::MIN))
+        );
+    }
+
+    #[test]
+    fn string_to_int_rejects_invalid_text() {
+        for text in ["", "-", "+5", " 5", "5 ", "12.5", "abc", "9223372036854775808"] {
+            let source = format!("string_to_int(\"{text}\")");
+            assert_eq!(
+                error_message(&source),
+                format!("invalid integer text: '{text}'"),
+                "source: {source}"
+            );
+        }
+    }
+
+    #[test]
+    fn evaluates_the_bool_and_int_conversion_builtins() {
+        assert_eq!(evaluate_source("bool_to_int(true)"), Ok(int(1)));
+        assert_eq!(evaluate_source("bool_to_int(false)"), Ok(int(0)));
+        assert_eq!(evaluate_source("int_to_bool(0)"), Ok(boolean(false)));
+        assert_eq!(evaluate_source("int_to_bool(1)"), Ok(boolean(true)));
+        // Any nonzero integer converts to true.
+        assert_eq!(evaluate_source("int_to_bool(-2)"), Ok(boolean(true)));
+    }
+
+    #[test]
+    fn evaluates_string_ordering_comparisons() {
+        assert_eq!(evaluate_source("\"abc\" < \"abd\""), Ok(boolean(true)));
+        assert_eq!(evaluate_source("\"b\" > \"a\""), Ok(boolean(true)));
+        // Equal strings compare false under strict ordering.
+        assert_eq!(evaluate_source("\"a\" < \"a\""), Ok(boolean(false)));
+        assert_eq!(evaluate_source("\"a\" <= \"a\""), Ok(boolean(true)));
+        assert_eq!(evaluate_source("\"abd\" >= \"abc\""), Ok(boolean(true)));
+    }
+
+    #[test]
+    fn round_trips_integers_through_the_string_builtins() {
+        assert_eq!(
+            evaluate_source("string_to_int(int_to_string(-42))"),
+            Ok(int(-42))
+        );
+    }
 }
