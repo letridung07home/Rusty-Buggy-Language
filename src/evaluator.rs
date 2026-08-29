@@ -271,7 +271,9 @@ fn evaluate_expression(
 /// Evaluates a function call: resolves the callee, evaluates the arguments,
 /// binds the parameters into a fresh scope, and evaluates the body. Recursion is
 /// natural because each call looks its callee up again in the environment. The
-/// call depth is guarded so runaway recursion reports a clear error.
+/// call depth is guarded so runaway recursion reports a clear error. Builtin
+/// calls are dispatched through the type checker's signature table first (the
+/// two never share a name) and consume no call depth.
 fn evaluate_call(
     callee: &str,
     arguments: &[Expression],
@@ -281,6 +283,12 @@ fn evaluate_call(
     call_depth: &mut usize,
     eval_depth: &mut usize,
 ) -> Result<Value, Error> {
+    if let Some(builtin) = crate::typecheck::builtin_signature(callee) {
+        return evaluate_builtin_call(
+            builtin, arguments, position, functions, scopes, call_depth, eval_depth,
+        );
+    }
+
     let function = functions
         .get(callee)
         .ok_or_else(|| positioned_error(format!("undefined function: '{callee}'"), position))?;
@@ -346,6 +354,88 @@ fn evaluate_call(
     result
 }
 
+/// Evaluates a call to a fixed-signature builtin function (`len`,
+/// `int_to_string`, `string_to_int`, `bool_to_int`, `int_to_bool`), mirroring
+/// the user-function runtime defenses with the builtin's name substituted. The
+/// call itself adds no evaluation frame, so it consumes no call depth.
+fn evaluate_builtin_call(
+    builtin: &crate::typecheck::Builtin,
+    arguments: &[Expression],
+    position: Option<SourcePosition>,
+    functions: &ResolvedFunctions,
+    scopes: &mut Vec<HashMap<String, Value>>,
+    call_depth: &mut usize,
+    eval_depth: &mut usize,
+) -> Result<Value, Error> {
+    let name = builtin.name;
+    if arguments.len() != builtin.parameter_types.len() {
+        return Err(positioned_error(
+            format!(
+                "wrong number of arguments for function '{name}': expected {}, found {}",
+                builtin.parameter_types.len(),
+                arguments.len()
+            ),
+            position,
+        ));
+    }
+
+    let mut argument_values = Vec::with_capacity(arguments.len());
+    for argument in arguments {
+        argument_values.push(evaluate_expression(
+            argument, functions, scopes, call_depth, eval_depth,
+        )?);
+    }
+
+    // The type checker enforces builtin argument types, but the evaluator
+    // defends the same invariant in case a fuzz target drives it without
+    // type-checking.
+    for (index, value) in argument_values.iter().enumerate() {
+        let expected = builtin.parameter_types[index];
+        if value_type_of(value) != expected {
+            return Err(positioned_error(
+                format!(
+                    "type mismatch in call to '{name}': expected an argument of type {}, found {}",
+                    expected.name(),
+                    value_type_name(value)
+                ),
+                position,
+            ));
+        }
+    }
+
+    Ok(match (name, argument_values.as_slice()) {
+        ("len", [Value::String(text)]) => Value::Int(text.chars().count() as i64),
+        ("int_to_string", [Value::Int(value)]) => Value::String(value.to_string()),
+        ("string_to_int", [Value::String(text)]) => match parse_builtin_integer(text) {
+            Some(value) => Value::Int(value),
+            None => {
+                return Err(positioned_error(
+                    format!("invalid integer text: '{text}'"),
+                    position,
+                ))
+            }
+        },
+        ("bool_to_int", [Value::Bool(flag)]) => Value::Int(i64::from(*flag)),
+        ("int_to_bool", [Value::Int(value)]) => Value::Bool(*value != 0),
+        _ => unreachable!("the signature defenses above cover every builtin"),
+    })
+}
+
+/// Parses the text argument of `string_to_int`: an optional leading `-`
+/// followed by one or more ASCII digits, with no whitespace or `+`, that must
+/// fit into an i64. Anything else (empty text, a lone `-`, surrounding
+/// whitespace, non-ASCII digits, an out-of-range magnitude) is rejected so the
+/// caller can report `invalid integer text`.
+fn parse_builtin_integer(text: &str) -> Option<i64> {
+    let digits = text.strip_prefix('-').unwrap_or(text);
+    if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    // With the digits-only shape enforced above, overflow is the only way the
+    // checked parse can fail.
+    text.parse::<i64>().ok()
+}
+
 fn value_type_of(value: &Value) -> crate::ast::Type {
     match value {
         Value::Int(_) => crate::ast::Type::Int,
@@ -403,23 +493,53 @@ fn evaluate_binary(
                 !equal
             }))
         }
-        BinaryOperator::Subtract
-        | BinaryOperator::Multiply
-        | BinaryOperator::Divide
-        | BinaryOperator::Remainder
-        | BinaryOperator::LessThan
+        BinaryOperator::LessThan
         | BinaryOperator::LessThanOrEqual
         | BinaryOperator::GreaterThan
         | BinaryOperator::GreaterThanOrEqual => {
+            let symbol = match operator {
+                BinaryOperator::LessThan => "<",
+                BinaryOperator::LessThanOrEqual => "<=",
+                BinaryOperator::GreaterThan => ">",
+                BinaryOperator::GreaterThanOrEqual => ">=",
+                _ => unreachable!("handled above"),
+            };
+
+            // Ordering compares two integers, or two strings lexicographically
+            // (str Ord). Any other pairing keeps the integer-path defense and
+            // its existing message.
+            let ordering = match (left, right) {
+                (Value::Int(a), Value::Int(b)) => a.cmp(&b),
+                (Value::String(a), Value::String(b)) => a.cmp(&b),
+                (a, b) => {
+                    return Err(positioned_error(
+                        format!(
+                            "type mismatch in '{symbol}': expected two integers, found {} and {}",
+                            value_type_name(&a),
+                            value_type_name(&b)
+                        ),
+                        position,
+                    ))
+                }
+            };
+
+            Ok(Value::Bool(match operator {
+                BinaryOperator::LessThan => ordering.is_lt(),
+                BinaryOperator::LessThanOrEqual => ordering.is_le(),
+                BinaryOperator::GreaterThan => ordering.is_gt(),
+                BinaryOperator::GreaterThanOrEqual => ordering.is_ge(),
+                _ => unreachable!("handled above"),
+            }))
+        }
+        BinaryOperator::Subtract
+        | BinaryOperator::Multiply
+        | BinaryOperator::Divide
+        | BinaryOperator::Remainder => {
             let symbol = match operator {
                 BinaryOperator::Subtract => "-",
                 BinaryOperator::Multiply => "*",
                 BinaryOperator::Divide => "/",
                 BinaryOperator::Remainder => "%",
-                BinaryOperator::LessThan => "<",
-                BinaryOperator::LessThanOrEqual => "<=",
-                BinaryOperator::GreaterThan => ">",
-                BinaryOperator::GreaterThanOrEqual => ">=",
                 _ => unreachable!("handled above"),
             };
 
@@ -464,10 +584,6 @@ fn evaluate_binary(
                             .ok_or_else(|| positioned_error("integer remainder overflow", position))
                     }
                 }
-                BinaryOperator::LessThan => Ok(Value::Bool(a < b)),
-                BinaryOperator::LessThanOrEqual => Ok(Value::Bool(a <= b)),
-                BinaryOperator::GreaterThan => Ok(Value::Bool(a > b)),
-                BinaryOperator::GreaterThanOrEqual => Ok(Value::Bool(a >= b)),
                 _ => unreachable!("handled above"),
             }
         }
@@ -1026,6 +1142,85 @@ mod tests {
         assert_eq!(
             error_message_on_large_stack(source),
             "program too deeply nested"
+        );
+    }
+
+    // --- Stdlib builtins and string ordering ---
+
+    #[test]
+    fn evaluates_the_len_builtin_over_string_characters() {
+        assert_eq!(evaluate_source("len(\"\")"), Ok(int(0)));
+        assert_eq!(evaluate_source("len(\"hello\")"), Ok(int(5)));
+        // len counts characters, not bytes: "héllo" is 5 chars over 6 bytes.
+        assert_eq!(evaluate_source("len(\"héllo\")"), Ok(int(5)));
+    }
+
+    #[test]
+    fn evaluates_the_int_to_string_builtin() {
+        assert_eq!(evaluate_source("int_to_string(0)"), Ok(string("0")));
+        assert_eq!(evaluate_source("int_to_string(42)"), Ok(string("42")));
+        assert_eq!(evaluate_source("int_to_string(-5)"), Ok(string("-5")));
+    }
+
+    #[test]
+    fn evaluates_the_string_to_int_builtin() {
+        assert_eq!(evaluate_source("string_to_int(\"0\")"), Ok(int(0)));
+        assert_eq!(evaluate_source("string_to_int(\"-7\")"), Ok(int(-7)));
+        // Leading zeros are accepted and normalized.
+        assert_eq!(evaluate_source("string_to_int(\"007\")"), Ok(int(7)));
+        // The signed minimum fits even though its magnitude does not.
+        assert_eq!(
+            evaluate_source("string_to_int(\"-9223372036854775808\")"),
+            Ok(int(i64::MIN))
+        );
+    }
+
+    #[test]
+    fn string_to_int_rejects_invalid_text() {
+        for text in [
+            "",
+            "-",
+            "+5",
+            " 5",
+            "5 ",
+            "12.5",
+            "abc",
+            "9223372036854775808",
+        ] {
+            let source = format!("string_to_int(\"{text}\")");
+            assert_eq!(
+                error_message(&source),
+                format!("invalid integer text: '{text}'"),
+                "source: {source}"
+            );
+        }
+    }
+
+    #[test]
+    fn evaluates_the_bool_and_int_conversion_builtins() {
+        assert_eq!(evaluate_source("bool_to_int(true)"), Ok(int(1)));
+        assert_eq!(evaluate_source("bool_to_int(false)"), Ok(int(0)));
+        assert_eq!(evaluate_source("int_to_bool(0)"), Ok(boolean(false)));
+        assert_eq!(evaluate_source("int_to_bool(1)"), Ok(boolean(true)));
+        // Any nonzero integer converts to true.
+        assert_eq!(evaluate_source("int_to_bool(-2)"), Ok(boolean(true)));
+    }
+
+    #[test]
+    fn evaluates_string_ordering_comparisons() {
+        assert_eq!(evaluate_source("\"abc\" < \"abd\""), Ok(boolean(true)));
+        assert_eq!(evaluate_source("\"b\" > \"a\""), Ok(boolean(true)));
+        // Equal strings compare false under strict ordering.
+        assert_eq!(evaluate_source("\"a\" < \"a\""), Ok(boolean(false)));
+        assert_eq!(evaluate_source("\"a\" <= \"a\""), Ok(boolean(true)));
+        assert_eq!(evaluate_source("\"abd\" >= \"abc\""), Ok(boolean(true)));
+    }
+
+    #[test]
+    fn round_trips_integers_through_the_string_builtins() {
+        assert_eq!(
+            evaluate_source("string_to_int(int_to_string(-42))"),
+            Ok(int(-42))
         );
     }
 }

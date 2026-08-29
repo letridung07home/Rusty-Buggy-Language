@@ -14,6 +14,11 @@
 //! slot it came from, so a concrete demand in an enclosing operator can pin that
 //! slot and the value "flows" upward. A type that no body or call site ever pins
 //! stays `Unknown` after convergence and is rejected as an inference failure.
+//!
+//! Calls to the fixed-signature builtin functions (`len`, `int_to_string`,
+//! `string_to_int`, `bool_to_int`, `int_to_bool`) are not inferred at all: they
+//! are checked directly against the builtin table, and a user function may not
+//! take a builtin's name.
 
 use std::collections::HashMap;
 
@@ -103,6 +108,52 @@ struct Signature {
 /// function's name to its declaration plus resolved parameter and result types.
 pub(crate) type ResolvedFunctions = HashMap<String, Function>;
 
+/// A fixed-signature builtin function. Builtins are pre-declared by the
+/// language: they are never parsed or user-declared, carry no body, and their
+/// parameter and result types are known ahead of time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Builtin {
+    pub(crate) name: &'static str,
+    pub(crate) parameter_types: &'static [Type],
+    pub(crate) result_type: Type,
+}
+
+/// The fixed builtin table: every function the language pre-declares. The
+/// checker validates builtin calls against it and the evaluator dispatches
+/// builtin calls through the same table, so both agree on the signatures.
+const BUILTINS: &[Builtin] = &[
+    Builtin {
+        name: "len",
+        parameter_types: &[Type::String],
+        result_type: Type::Int,
+    },
+    Builtin {
+        name: "int_to_string",
+        parameter_types: &[Type::Int],
+        result_type: Type::String,
+    },
+    Builtin {
+        name: "string_to_int",
+        parameter_types: &[Type::String],
+        result_type: Type::Int,
+    },
+    Builtin {
+        name: "bool_to_int",
+        parameter_types: &[Type::Bool],
+        result_type: Type::Int,
+    },
+    Builtin {
+        name: "int_to_bool",
+        parameter_types: &[Type::Int],
+        result_type: Type::Bool,
+    },
+];
+
+/// Looks up a builtin by name.
+pub(crate) fn builtin_signature(name: &str) -> Option<&'static Builtin> {
+    BUILTINS.iter().find(|builtin| builtin.name == name)
+}
+
 /// Type-checks the program and returns the resolved function bindings (the
 /// [`ResolvedFunctions`] the evaluator uses to run calls). Doing both in one
 /// call keeps inference single-pass and guarantees the evaluator and the
@@ -162,10 +213,27 @@ fn initial_signatures(functions: &[FunctionDeclaration]) -> Vec<Signature> {
         .collect()
 }
 
-/// Validates the structural properties that inference cannot repair: every call
-/// resolves to a declared function with the right number of arguments. Runs
-/// before inference so call-shape errors are reported deterministically.
+/// A user function may not take a builtin's name: builtins are pre-declared by
+/// the language, so redeclaring one is a duplicate declaration. The wording
+/// mirrors the parser's error for two user functions with the same name.
+fn check_builtin_collisions(functions: &[FunctionDeclaration]) -> Result<(), Error> {
+    for function in functions {
+        if builtin_signature(&function.name).is_some() {
+            return Err(positioned(
+                format!("duplicate function declaration: '{}'", function.name),
+                function.position,
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Validates the structural properties that inference cannot repair: no user
+/// function takes a builtin's name, and every call resolves to a declared
+/// function or a builtin. Runs before inference so declaration and call-shape
+/// errors are reported deterministically.
 fn structural_checks(program: &Program) -> Result<(), Error> {
+    check_builtin_collisions(&program.functions)?;
     let names: Vec<&str> = program.functions.iter().map(|f| f.name.as_str()).collect();
     for function in &program.functions {
         check_expression_calls(
@@ -196,7 +264,7 @@ fn check_expression_shape(expression: &Expression, names: &[&str]) -> Result<(),
             arguments,
             position,
         } => {
-            if !names.contains(&callee.as_str()) {
+            if !names.contains(&callee.as_str()) && builtin_signature(callee).is_none() {
                 return Err(positioned(
                     format!("undefined function: '{callee}'"),
                     *position,
@@ -416,10 +484,27 @@ fn check_expr_flow(
             arguments,
             position,
         } => {
-            let fi = signatures
+            let fi = match signatures
                 .iter()
                 .position(|signature| signature.name == *callee)
-                .ok_or_else(|| positioned(format!("undefined function: '{callee}'"), *position))?;
+            {
+                Some(fi) => fi,
+                None => match builtin_signature(callee) {
+                    // A fixed-signature builtin bypasses inference entirely:
+                    // its arity, argument types, and result type are known.
+                    Some(builtin) => {
+                        return check_builtin_call(
+                            builtin, arguments, *position, params, locals, signatures,
+                        );
+                    }
+                    None => {
+                        return Err(positioned(
+                            format!("undefined function: '{callee}'"),
+                            *position,
+                        ))
+                    }
+                },
+            };
             let arity = signatures[fi].parameter_types.len();
             if arguments.len() != arity {
                 return Err(positioned(
@@ -503,6 +588,49 @@ fn check_expr_flow(
             unify_branches(then_flow, else_flow, *position)
         }
     }
+}
+
+/// Checks a call to a fixed-signature builtin: the arity error mirrors the
+/// user-function wording, argument type mismatches are reported at the call
+/// site like user-function mismatches, and unknown argument slots are pinned
+/// to the builtin's parameter types. The call's type is the builtin's result.
+fn check_builtin_call(
+    builtin: &Builtin,
+    arguments: &[Expression],
+    position: Option<SourcePosition>,
+    params: &Params,
+    locals: &mut Locals,
+    signatures: &mut [Signature],
+) -> Result<Flow, Error> {
+    let arity = builtin.parameter_types.len();
+    if arguments.len() != arity {
+        return Err(positioned(
+            format!(
+                "wrong number of arguments for function '{}': expected {arity}, found {}",
+                builtin.name,
+                arguments.len()
+            ),
+            position,
+        ));
+    }
+    for (index, argument) in arguments.iter().enumerate() {
+        let expected = builtin.parameter_types[index];
+        let argument_flow = check_expr_flow(argument, params, locals, signatures)?;
+        if is_bad_operand(argument_flow, expected) {
+            return Err(positioned(
+                format!(
+                    "type mismatch in call to '{}': expected argument {} to be {}, found {}",
+                    builtin.name,
+                    index + 1,
+                    expected.name(),
+                    argument_flow.name()
+                ),
+                position,
+            ));
+        }
+        pin_type(argument_flow, expected, signatures);
+    }
+    Ok(Flow::Concrete(builtin.result_type))
 }
 
 /// Pins any unknown slot to `required` (a settled operand or conflict is
@@ -657,20 +785,12 @@ fn check_binary(
         BinaryOperator::Subtract
         | BinaryOperator::Multiply
         | BinaryOperator::Divide
-        | BinaryOperator::Remainder
-        | BinaryOperator::LessThan
-        | BinaryOperator::LessThanOrEqual
-        | BinaryOperator::GreaterThan
-        | BinaryOperator::GreaterThanOrEqual => {
+        | BinaryOperator::Remainder => {
             let symbol = match operator {
                 BinaryOperator::Subtract => "-",
                 BinaryOperator::Multiply => "*",
                 BinaryOperator::Divide => "/",
                 BinaryOperator::Remainder => "%",
-                BinaryOperator::LessThan => "<",
-                BinaryOperator::LessThanOrEqual => "<=",
-                BinaryOperator::GreaterThan => ">",
-                BinaryOperator::GreaterThanOrEqual => ">=",
                 _ => unreachable!("handled above"),
             };
             require_two(
@@ -682,13 +802,33 @@ fn check_binary(
                 position,
                 signatures,
             )?;
-            Ok(match operator {
-                BinaryOperator::Subtract
-                | BinaryOperator::Multiply
-                | BinaryOperator::Divide
-                | BinaryOperator::Remainder => Flow::Concrete(Type::Int),
-                _ => Flow::Concrete(Type::Bool),
-            })
+            Ok(Flow::Concrete(Type::Int))
+        }
+        BinaryOperator::LessThan
+        | BinaryOperator::LessThanOrEqual
+        | BinaryOperator::GreaterThan
+        | BinaryOperator::GreaterThanOrEqual => {
+            let symbol = match operator {
+                BinaryOperator::LessThan => "<",
+                BinaryOperator::LessThanOrEqual => "<=",
+                BinaryOperator::GreaterThan => ">",
+                BinaryOperator::GreaterThanOrEqual => ">=",
+                _ => unreachable!("handled above"),
+            };
+            // Ordering compares two integers or two strings. A concrete string
+            // operand selects the string rule; otherwise the integer rule
+            // applies exactly as before, including its error message.
+            let (required, family) = if matches!(left_flow, Flow::Concrete(Type::String))
+                || matches!(right_flow, Flow::Concrete(Type::String))
+            {
+                (Type::String, "strings")
+            } else {
+                (Type::Int, "integers")
+            };
+            require_two(
+                left_flow, right_flow, required, family, symbol, position, signatures,
+            )?;
+            Ok(Flow::Concrete(Type::Bool))
         }
     }
 }
@@ -1050,6 +1190,80 @@ mod tests {
         assert!(
             check_error("fn choose(a, b) = { if true { a } else { b } }; 1")
                 .contains("cannot infer")
+        );
+    }
+
+    // --- Stdlib builtins and string ordering ---
+
+    #[test]
+    fn rejects_redeclaring_a_builtin_as_a_user_function() {
+        assert_eq!(
+            check_error("fn len() = { 0 }; 1"),
+            "duplicate function declaration: 'len'"
+        );
+        assert_eq!(
+            check_error("fn int_to_string() = { \"\" }; 1"),
+            "duplicate function declaration: 'int_to_string'"
+        );
+    }
+
+    #[test]
+    fn rejects_builtin_calls_with_the_wrong_argument_count() {
+        assert_eq!(
+            check_error("len(\"a\", \"b\")"),
+            "wrong number of arguments for function 'len': expected 1, found 2"
+        );
+        assert_eq!(
+            check_error("string_to_int()"),
+            "wrong number of arguments for function 'string_to_int': expected 1, found 0"
+        );
+    }
+
+    #[test]
+    fn rejects_builtin_calls_with_mismatched_argument_types() {
+        assert_eq!(
+            check_error("len(1)"),
+            "type mismatch in call to 'len': expected argument 1 to be string, found integer"
+        );
+        assert_eq!(
+            check_error("int_to_string(\"a\")"),
+            "type mismatch in call to 'int_to_string': expected argument 1 to be integer, found string"
+        );
+        assert_eq!(
+            check_error("bool_to_int(1)"),
+            "type mismatch in call to 'bool_to_int': expected argument 1 to be boolean, found integer"
+        );
+        assert_eq!(
+            check_error("int_to_bool(true)"),
+            "type mismatch in call to 'int_to_bool': expected argument 1 to be integer, found boolean"
+        );
+    }
+
+    #[test]
+    fn builtin_calls_pin_unknown_parameter_types() {
+        // The `len(x)` demand pins `x` to string, so the string call site
+        // type-checks while a later integer call site conflicts with the
+        // pinned signature.
+        accepts("fn f(x) = { len(x) }; f(\"ab\")");
+        assert_eq!(
+            check_error("fn f(x) = { len(x) }; f(1)"),
+            "type mismatch in call to 'f': expected argument 1 to be string, found integer"
+        );
+        // A builtin argument demand pins through any pass-through parameter.
+        accepts("fn f(x) = { string_to_int(x) }; f(\"42\")");
+    }
+
+    #[test]
+    fn ordering_accepts_two_strings_and_rejects_mixed_operands() {
+        accepts("\"a\" < \"b\"");
+        accepts("\"a\" <= \"b\" && \"b\" >= \"a\"");
+        assert_eq!(
+            check_error("\"a\" < 1"),
+            "type mismatch in '<': expected two strings, found string and integer"
+        );
+        assert_eq!(
+            check_error("1 > \"a\""),
+            "type mismatch in '>': expected two strings, found integer and string"
         );
     }
 }

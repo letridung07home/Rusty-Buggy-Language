@@ -474,7 +474,7 @@ fn expected_help() -> String {
         "       rusty-buggy-language [--positions] [--input-limit <bytes>] -f <path> | --file <path>\n",
         "       rusty-buggy-language [--positions] [--input-limit <bytes>] --stdin\n",
         "\n",
-        "Evaluates an expression program with immutable let bindings, integers, booleans (true/false, !, &&, ||), strings (\"...\" with \\n, \\t, \\\\, and \\\" escapes), if/else expressions with { } blocks, function declarations (fn name(param, ...) = { body }; with recursive calls), comparisons (<, <=, >, >=, ==, !=), +, -, *, /, %, // and /* */ comments, parentheses, and prefix -.\n",
+        "Evaluates an expression program with immutable let bindings, integers, booleans (true/false, !, &&, ||), strings (\"...\" with \\n, \\t, \\\\, and \\\" escapes), if/else expressions with { } blocks, function declarations (fn name(param, ...) = { body }; with recursive calls), built-in functions (len, int_to_string, string_to_int, bool_to_int, int_to_bool), comparisons (<, <=, >, >=, ==, !=; <, <=, >, >= also order strings), +, -, *, /, %, // and /* */ comments, parentheses, and prefix -.\n",
         "\n",
         "The program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input. Source modes are mutually exclusive. `--repl` reads one program per line from standard input and prints each result.\n",
         "\n",

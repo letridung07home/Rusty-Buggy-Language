@@ -1,0 +1,1 @@
+let text = int_to_string(-42); text + "!"
