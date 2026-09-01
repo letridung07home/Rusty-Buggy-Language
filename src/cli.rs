@@ -585,7 +585,7 @@ mod tests {
         assert_eq!(
             execute(arguments(&["--json", "1 + 2 3"])),
             Ok(Output::Json {
-                text: "{\"ok\":false,\"error\":\"unexpected trailing token: integer literal\",\n\"line\":1,\"column\":7}".to_owned(),
+                text: "{\"ok\":false,\"error\":\"unexpected trailing token: integer literal\",\"line\":1,\"column\":7}".to_owned(),
                 ok: false,
             })
         );
