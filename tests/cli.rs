@@ -470,9 +470,9 @@ fn expected_help() -> String {
         "       rusty-buggy-language --repl\n",
         "       rusty-buggy-language -h | --help\n",
         "       rusty-buggy-language -V | --version\n",
-        "       rusty-buggy-language [--positions] [--input-limit <bytes>] <program>\n",
-        "       rusty-buggy-language [--positions] [--input-limit <bytes>] -f <path> | --file <path>\n",
-        "       rusty-buggy-language [--positions] [--input-limit <bytes>] --stdin\n",
+        "       rusty-buggy-language [--positions] [--input-limit <bytes>] [--json] <program>\n",
+        "       rusty-buggy-language [--positions] [--input-limit <bytes>] [--json] -f <path> | --file <path>\n",
+        "       rusty-buggy-language [--positions] [--input-limit <bytes>] [--json] --stdin\n",
         "\n",
         "Evaluates an expression program with immutable let bindings, integers, booleans (true/false, !, &&, ||), strings (\"...\" with \\n, \\t, \\\\, and \\\" escapes), if/else expressions with { } blocks, function declarations (fn name(param, ...) = { body }; with recursive calls), built-in functions (len, int_to_string, string_to_int, bool_to_int, int_to_bool), comparisons (<, <=, >, >=, ==, !=; <, <=, >, >= also order strings), +, -, *, /, %, // and /* */ comments, parentheses, and prefix -.\n",
         "\n",
@@ -480,6 +480,10 @@ fn expected_help() -> String {
         "\n",
         "--positions      Also report the line and column of evaluation or syntax errors.\n",
         "--input-limit N  Reject programs longer than N bytes before evaluation.\n",
+        "--json           Print one machine-readable JSON document on stdout instead of\n",
+        "                 prose: {\"ok\":true,\"value\":...,\"type\":...} on success or\n",
+        "                 {\"ok\":false,\"error\":...[,\"line\":n,\"column\":n]} on failure.\n",
+        "                 Exit status still reports failure.\n",
     )
     .to_string()
 }
