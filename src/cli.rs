@@ -81,9 +81,15 @@ fn json_success(value: &Value) -> String {
 /// Renders an evaluation failure as the complete JSON document, including the
 /// source position whenever the error carries one.
 fn json_error(error: &Error) -> String {
-    let mut out = format!("{{\"ok\":false,\"error\":\"{}\"", json_escape(error.message()));
+    let mut out = format!(
+        "{{\"ok\":false,\"error\":\"{}\"",
+        json_escape(error.message())
+    );
     if let Some(position) = error.position() {
-        out.push_str(&format!(",\"line\":{},\"column\":{}", position.line, position.column));
+        out.push_str(&format!(
+            ",\"line\":{},\"column\":{}",
+            position.line, position.column
+        ));
     }
     out.push('}');
     out
@@ -138,7 +144,10 @@ enum Output {
     Version,
     /// A complete JSON document plus whether it reports success (drives the
     /// exit status: a JSON error document still exits with FAILURE).
-    Json { text: String, ok: bool },
+    Json {
+        text: String,
+        ok: bool,
+    },
 }
 
 fn execute<I>(args: I) -> Result<Output, String>
@@ -596,7 +605,8 @@ mod tests {
         assert_eq!(
             execute(arguments(&["--json", "\"he said \\\"hi\\\"\\nok\""])),
             Ok(Output::Json {
-                text: "{\"ok\":true,\"value\":\"he said \\\"hi\\\"\\nok\",\"type\":\"string\"}".to_owned(),
+                text: "{\"ok\":true,\"value\":\"he said \\\"hi\\\"\\nok\",\"type\":\"string\"}"
+                    .to_owned(),
                 ok: true,
             })
         );

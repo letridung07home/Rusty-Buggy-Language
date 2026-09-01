@@ -689,7 +689,10 @@ fn json_flag_prints_a_success_document() {
     let output = run_cli(&["--json", "1 + 2"]);
 
     assert!(output.status.success());
-    assert_eq!(output.stdout, b"{\"ok\":true,\"value\":3,\"type\":\"integer\"}\n");
+    assert_eq!(
+        output.stdout,
+        b"{\"ok\":true,\"value\":3,\"type\":\"integer\"}\n"
+    );
     assert!(output.stderr.is_empty());
 }
 
@@ -698,12 +701,18 @@ fn json_flag_prints_boolean_and_string_documents() {
     let output = run_cli(&["--json", "1 < 2"]);
 
     assert!(output.status.success());
-    assert_eq!(output.stdout, b"{\"ok\":true,\"value\":true,\"type\":\"boolean\"}\n");
+    assert_eq!(
+        output.stdout,
+        b"{\"ok\":true,\"value\":true,\"type\":\"boolean\"}\n"
+    );
 
     let output = run_cli(&["--json", "int_to_string(42)"]);
 
     assert!(output.status.success());
-    assert_eq!(output.stdout, b"{\"ok\":true,\"value\":\"42\",\"type\":\"string\"}\n");
+    assert_eq!(
+        output.stdout,
+        b"{\"ok\":true,\"value\":\"42\",\"type\":\"string\"}\n"
+    );
 }
 
 #[test]
@@ -749,7 +758,10 @@ fn json_flag_works_with_file_sources() {
     let output = run_cli(&["--json", "--file", source.as_str()]);
 
     assert!(output.status.success());
-    assert_eq!(output.stdout, b"{\"ok\":true,\"value\":100,\"type\":\"integer\"}\n");
+    assert_eq!(
+        output.stdout,
+        b"{\"ok\":true,\"value\":100,\"type\":\"integer\"}\n"
+    );
 }
 
 #[test]
