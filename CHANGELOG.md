@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-09-02
+
+### Added
+
+- Added a `--json` CLI mode that prints one machine-readable JSON document on
+  stdout instead of prose, so agents can consume output without parsing text:
+  success is `{"ok":true,"value":<result>,"type":"integer"|"boolean"|"string"}`
+  and failure is `{"ok":false,"error":"<message>"[,"line":L,"column":C]}` —
+  the position fields appear when the error carries a source position (the
+  same positions `--positions` exposes). A JSON error document still exits
+  with a failure status. Without the flag, output is unchanged. Hand-rolled
+  JSON escaping keeps the crate dependency-free (`"`, `\\`, `\n`, `\t`, `\r`,
+  and `\u00XX` for other control characters; non-ASCII passes through as
+  UTF-8). Works with all source modes (inline, `-f/--file`, `--stdin`).
+
 ## [2.3.0] - 2026-08-29
 
 ### Added

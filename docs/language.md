@@ -49,6 +49,7 @@ Two optional configuration flags may appear alongside an inline program, a
 | --- | --- |
 | `--positions` | Also report the line and column of an evaluation, type, or syntax error. When set, the CLI prints `error: <message>` to standard error followed by ` at line L, column C`. Without it, error output is exactly the plain `error: <message>` line. |
 | `--input-limit <bytes>` | Reject a source program longer than `<bytes>` bytes before it is parsed or evaluated. The value must be a non-negative integer. |
+| `--json` | Print one machine-readable JSON document on stdout instead of prose, so agents can consume output without parsing text. On success: `{"ok":true,"value":<result>,"type":"integer"|"boolean"|"string"}`. On failure: `{"ok":false,"error":"<message>"[,"line":L,"column":C]}` — the position fields appear when the error carries a source position (the same positions `--positions` exposes). A JSON error document still exits with a failure status. Without the flag, output is unchanged. |
 
 ## Resource limits
 
@@ -399,6 +400,15 @@ standard error, prints no result, and exits unsuccessfully. Errors include:
 
 When `--positions` is supplied, the CLI appends ` at line L, column C` to the
 error so the failure can be located in the source.
+
+With `--json`, the CLI prints one machine-readable JSON document on stdout
+instead of prose, so agents can consume results without parsing text:
+
+- success: `{"ok":true,"value":<result>,"type":"integer"|"boolean"|"string"}`;
+- failure: `{"ok":false,"error":"<message>"[,"line":L,"column":C]}` — the
+  position fields appear when the error carries a source position (the same
+  positions `--positions` exposes). A JSON error document still exits with a
+  failure status. Without the flag, output is unchanged.
 
 For example:
 

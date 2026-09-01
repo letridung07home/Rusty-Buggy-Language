@@ -470,9 +470,9 @@ fn expected_help() -> String {
         "       rusty-buggy-language --repl\n",
         "       rusty-buggy-language -h | --help\n",
         "       rusty-buggy-language -V | --version\n",
-        "       rusty-buggy-language [--positions] [--input-limit <bytes>] <program>\n",
-        "       rusty-buggy-language [--positions] [--input-limit <bytes>] -f <path> | --file <path>\n",
-        "       rusty-buggy-language [--positions] [--input-limit <bytes>] --stdin\n",
+        "       rusty-buggy-language [--positions] [--input-limit <bytes>] [--json] <program>\n",
+        "       rusty-buggy-language [--positions] [--input-limit <bytes>] [--json] -f <path> | --file <path>\n",
+        "       rusty-buggy-language [--positions] [--input-limit <bytes>] [--json] --stdin\n",
         "\n",
         "Evaluates an expression program with immutable let bindings, integers, booleans (true/false, !, &&, ||), strings (\"...\" with \\n, \\t, \\\\, and \\\" escapes), if/else expressions with { } blocks, function declarations (fn name(param, ...) = { body }; with recursive calls), built-in functions (len, int_to_string, string_to_int, bool_to_int, int_to_bool), comparisons (<, <=, >, >=, ==, !=; <, <=, >, >= also order strings), +, -, *, /, %, // and /* */ comments, parentheses, and prefix -.\n",
         "\n",
@@ -480,6 +480,10 @@ fn expected_help() -> String {
         "\n",
         "--positions      Also report the line and column of evaluation or syntax errors.\n",
         "--input-limit N  Reject programs longer than N bytes before evaluation.\n",
+        "--json           Print one machine-readable JSON document on stdout instead of\n",
+        "                 prose: {\"ok\":true,\"value\":...,\"type\":...} on success or\n",
+        "                 {\"ok\":false,\"error\":...[,\"line\":n,\"column\":n]} on failure.\n",
+        "                 Exit status still reports failure.\n",
     )
     .to_string()
 }
@@ -678,4 +682,96 @@ fn repl_fails_when_no_programs_are_supplied() {
     assert!(!output.status.success());
     assert_eq!(output.stdout, b">\n>\n");
     assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn json_flag_prints_a_success_document() {
+    let output = run_cli(&["--json", "1 + 2"]);
+
+    assert!(output.status.success());
+    assert_eq!(
+        output.stdout,
+        b"{\"ok\":true,\"value\":3,\"type\":\"integer\"}\n"
+    );
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn json_flag_prints_boolean_and_string_documents() {
+    let output = run_cli(&["--json", "1 < 2"]);
+
+    assert!(output.status.success());
+    assert_eq!(
+        output.stdout,
+        b"{\"ok\":true,\"value\":true,\"type\":\"boolean\"}\n"
+    );
+
+    let output = run_cli(&["--json", "int_to_string(42)"]);
+
+    assert!(output.status.success());
+    assert_eq!(
+        output.stdout,
+        b"{\"ok\":true,\"value\":\"42\",\"type\":\"string\"}\n"
+    );
+}
+
+#[test]
+fn json_flag_reports_errors_with_position_and_failure_status() {
+    let output = run_cli(&["--json", "1 + 2 3"]);
+
+    assert!(!output.status.success());
+    assert_eq!(
+        output.stdout,
+        b"{\"ok\":false,\"error\":\"unexpected trailing token: integer literal\",\"line\":1,\"column\":7}\n"
+    );
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn json_flag_error_document_without_position_when_positions_unset() {
+    // Runtime errors carry no source position unless the evaluator attaches
+    // one; division by zero has one, so use an argument error instead.
+    let output = run_cli(&["--json"]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        output.stderr,
+        b"error: expected exactly one expression argument\n"
+    );
+}
+
+#[test]
+fn json_flag_escapes_quotes_and_newlines_in_strings() {
+    let output = run_cli(&["--json", "\"he said \\\"hi\\\"\\nok\""]);
+
+    assert!(output.status.success());
+    assert_eq!(
+        output.stdout,
+        b"{\"ok\":true,\"value\":\"he said \\\"hi\\\"\\nok\",\"type\":\"string\"}\n"
+    );
+}
+
+#[test]
+fn json_flag_works_with_file_sources() {
+    let source = TemporarySource::new(b"let rate = 20;\nlet quantity = 5;\nrate * quantity");
+    let output = run_cli(&["--json", "--file", source.as_str()]);
+
+    assert!(output.status.success());
+    assert_eq!(
+        output.stdout,
+        b"{\"ok\":true,\"value\":100,\"type\":\"integer\"}\n"
+    );
+}
+
+#[test]
+fn json_flag_ignores_positions_flag_for_output_shape() {
+    // --positions only affects prose error output; --json keeps its own shape.
+    let output = run_cli(&["--json", "--positions", "8 / (3 - 3)"]);
+
+    assert!(!output.status.success());
+    assert_eq!(
+        output.stdout,
+        b"{\"ok\":false,\"error\":\"division by zero\",\"line\":1,\"column\":3}\n"
+    );
 }

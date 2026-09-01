@@ -6,7 +6,7 @@ use std::process::ExitCode;
 
 use rusty_buggy_language::{evaluate_with_limits, Error, Limits, Value};
 
-const HELP: &str = "Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -f <path> | --file <path>\n       rusty-buggy-language --stdin\n       rusty-buggy-language --repl\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n       rusty-buggy-language [--positions] [--input-limit <bytes>] <program>\n       rusty-buggy-language [--positions] [--input-limit <bytes>] -f <path> | --file <path>\n       rusty-buggy-language [--positions] [--input-limit <bytes>] --stdin\n\nEvaluates an expression program with immutable let bindings, integers, booleans (true/false, !, &&, ||), strings (\"...\" with \\n, \\t, \\\\, and \\\" escapes), if/else expressions with { } blocks, function declarations (fn name(param, ...) = { body }; with recursive calls), built-in functions (len, int_to_string, string_to_int, bool_to_int, int_to_bool), comparisons (<, <=, >, >=, ==, !=; <, <=, >, >= also order strings), +, -, *, /, %, // and /* */ comments, parentheses, and prefix -.\n\nThe program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input. Source modes are mutually exclusive. `--repl` reads one program per line from standard input and prints each result.\n\n--positions      Also report the line and column of evaluation or syntax errors.\n--input-limit N  Reject programs longer than N bytes before evaluation.";
+const HELP: &str = "Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -f <path> | --file <path>\n       rusty-buggy-language --stdin\n       rusty-buggy-language --repl\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n       rusty-buggy-language [--positions] [--input-limit <bytes>] [--json] <program>\n       rusty-buggy-language [--positions] [--input-limit <bytes>] [--json] -f <path> | --file <path>\n       rusty-buggy-language [--positions] [--input-limit <bytes>] [--json] --stdin\n\nEvaluates an expression program with immutable let bindings, integers, booleans (true/false, !, &&, ||), strings (\"...\" with \\n, \\t, \\\\, and \\\" escapes), if/else expressions with { } blocks, function declarations (fn name(param, ...) = { body }; with recursive calls), built-in functions (len, int_to_string, string_to_int, bool_to_int, int_to_bool), comparisons (<, <=, >, >=, ==, !=; <, <=, >, >= also order strings), +, -, *, /, %, // and /* */ comments, parentheses, and prefix -.\n\nThe program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input. Source modes are mutually exclusive. `--repl` reads one program per line from standard input and prints each result.\n\n--positions      Also report the line and column of evaluation or syntax errors.\n--input-limit N  Reject programs longer than N bytes before evaluation.\n--json           Print one machine-readable JSON document on stdout instead of\n                 prose: {\"ok\":true,\"value\":...,\"type\":...} on success or\n                 {\"ok\":false,\"error\":...[,\"line\":n,\"column\":n]} on failure.\n                 Exit status still reports failure.";
 
 const VERSION: &str = concat!("rusty-buggy-language ", env!("CARGO_PKG_VERSION"));
 
@@ -30,6 +30,12 @@ where
         Ok(Output::Value(value)) => println!("{value}"),
         Ok(Output::Help) => println!("{HELP}"),
         Ok(Output::Version) => println!("{VERSION}"),
+        Ok(Output::Json { text, ok }) => {
+            println!("{text}");
+            if !ok {
+                return ExitCode::FAILURE;
+            }
+        }
         Err(message) => {
             eprintln!("error: {message}");
             return ExitCode::FAILURE;
@@ -37,6 +43,56 @@ where
     }
 
     ExitCode::SUCCESS
+}
+
+/// Escapes `raw` into a JSON string body (without the surrounding quotes).
+/// Hand-rolled because the crate is deliberately dependency-free; covers the
+/// two mandatory escapes, the short forms for the common control characters,
+/// and \u00XX for every other control character. Non-ASCII text passes
+/// through as UTF-8, which is valid inside a JSON string.
+fn json_escape(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len() + 2);
+    for character in raw.chars() {
+        match character {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            '\r' => out.push_str("\\r"),
+            c if (c as u32) < 0x20 => {
+                out.push_str(&format!("\\u{:04x}", c as u32));
+            }
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// Renders a successful result as the complete JSON document.
+fn json_success(value: &Value) -> String {
+    let (literal, kind) = match value {
+        Value::Int(number) => (number.to_string(), "integer"),
+        Value::Bool(flag) => (flag.to_string(), "boolean"),
+        Value::String(text) => (format!("\"{}\"", json_escape(text)), "string"),
+    };
+    format!("{{\"ok\":true,\"value\":{literal},\"type\":\"{kind}\"}}")
+}
+
+/// Renders an evaluation failure as the complete JSON document, including the
+/// source position whenever the error carries one.
+fn json_error(error: &Error) -> String {
+    let mut out = format!(
+        "{{\"ok\":false,\"error\":\"{}\"",
+        json_escape(error.message())
+    );
+    if let Some(position) = error.position() {
+        out.push_str(&format!(
+            ",\"line\":{},\"column\":{}",
+            position.line, position.column
+        ));
+    }
+    out.push('}');
+    out
 }
 
 /// Runs the interactive REPL: reads one program per line from `input` and
@@ -86,6 +142,12 @@ enum Output {
     Value(Value),
     Help,
     Version,
+    /// A complete JSON document plus whether it reports success (drives the
+    /// exit status: a JSON error document still exits with FAILURE).
+    Json {
+        text: String,
+        ok: bool,
+    },
 }
 
 fn execute<I>(args: I) -> Result<Output, String>
@@ -123,7 +185,7 @@ where
         None => Limits::default(),
     };
 
-    evaluate_source(source, &limits, invocation.positions)
+    evaluate_source(source, &limits, invocation.positions, invocation.json)
 }
 
 fn read_source<R>(source: SourceArg, reader: &mut R) -> Result<String, String>
@@ -137,10 +199,33 @@ where
     }
 }
 
-fn evaluate_source(source: String, limits: &Limits, positions: bool) -> Result<Output, String> {
+fn evaluate_source(
+    source: String,
+    limits: &Limits,
+    positions: bool,
+    json: bool,
+) -> Result<Output, String> {
     match evaluate_with_limits(&source, limits) {
-        Ok(value) => Ok(Output::Value(value)),
-        Err(error) => Err(format_error(&error, positions)),
+        Ok(value) => {
+            if json {
+                Ok(Output::Json {
+                    text: json_success(&value),
+                    ok: true,
+                })
+            } else {
+                Ok(Output::Value(value))
+            }
+        }
+        Err(error) => {
+            if json {
+                Ok(Output::Json {
+                    text: json_error(&error),
+                    ok: false,
+                })
+            } else {
+                Err(format_error(&error, positions))
+            }
+        }
     }
 }
 
@@ -183,6 +268,7 @@ struct Invocation {
     source: Option<SourceArg>,
     input_limit: Option<usize>,
     positions: bool,
+    json: bool,
 }
 
 fn parse_invocation(args: &[OsString]) -> Result<Invocation, String> {
@@ -190,6 +276,7 @@ fn parse_invocation(args: &[OsString]) -> Result<Invocation, String> {
         source: None,
         input_limit: None,
         positions: false,
+        json: false,
     };
 
     let mut index = 0;
@@ -199,6 +286,12 @@ fn parse_invocation(args: &[OsString]) -> Result<Invocation, String> {
 
         if as_str == Some("--positions") {
             invocation.positions = true;
+            index += 1;
+            continue;
+        }
+
+        if as_str == Some("--json") {
+            invocation.json = true;
             index += 1;
             continue;
         }
@@ -464,6 +557,58 @@ mod tests {
         assert_eq!(
             execute(arguments(&["--positions", "1 + 2 3"])),
             Err("unexpected trailing token: integer literal\n at line 1, column 7".to_owned())
+        );
+    }
+
+    #[test]
+    fn json_flag_prints_a_success_document() {
+        assert_eq!(
+            execute(arguments(&["--json", "1 + 2"])),
+            Ok(Output::Json {
+                text: "{\"ok\":true,\"value\":3,\"type\":\"integer\"}".to_owned(),
+                ok: true,
+            })
+        );
+    }
+
+    #[test]
+    fn json_flag_prints_boolean_and_string_documents() {
+        assert_eq!(
+            execute(arguments(&["--json", "1 < 2"])),
+            Ok(Output::Json {
+                text: "{\"ok\":true,\"value\":true,\"type\":\"boolean\"}".to_owned(),
+                ok: true,
+            })
+        );
+        assert_eq!(
+            execute(arguments(&["--json", "int_to_string(42)"])),
+            Ok(Output::Json {
+                text: "{\"ok\":true,\"value\":\"42\",\"type\":\"string\"}".to_owned(),
+                ok: true,
+            })
+        );
+    }
+
+    #[test]
+    fn json_flag_reports_errors_with_position() {
+        assert_eq!(
+            execute(arguments(&["--json", "1 + 2 3"])),
+            Ok(Output::Json {
+                text: "{\"ok\":false,\"error\":\"unexpected trailing token: integer literal\",\"line\":1,\"column\":7}".to_owned(),
+                ok: false,
+            })
+        );
+    }
+
+    #[test]
+    fn json_flag_escapes_quotes_and_newlines_in_strings() {
+        assert_eq!(
+            execute(arguments(&["--json", "\"he said \\\"hi\\\"\\nok\""])),
+            Ok(Output::Json {
+                text: "{\"ok\":true,\"value\":\"he said \\\"hi\\\"\\nok\",\"type\":\"string\"}"
+                    .to_owned(),
+                ok: true,
+            })
         );
     }
 }
