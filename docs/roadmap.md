@@ -191,14 +191,14 @@ on completion. Developers choose which tasks ship in each release.
 
 **Agent-facing toolkit**
 
-- [ ] Add the first standard-library functions: `len` (string length in
+- [x] Add the first standard-library functions: `len` (string length in
   characters), `int_to_string`, `string_to_int` (rejecting non-integer text
   with a positioned error), `bool_to_int` (`1`/`0`), and `int_to_bool`
   (`0` is false, any other value is true), plus lexicographic ordering
-  comparisons (`<`, `<=`, `>`, `>=`) on strings.
-- [ ] Add a `--json` CLI mode that prints the result, or the error message
+  comparisons (`<`, `<=`, `>`, `>=`) on strings. (shipped in v2.3.0)
+- [x] Add a `--json` CLI mode that prints the result, or the error message
   and position, as machine-readable JSON so agents can consume output
-  without parsing prose.
+  without parsing prose. (shipped in v2.4.0)
 - [ ] Improve error rendering: `--positions` gains a source snippet showing
   the offending line with a caret under the error column.
 
