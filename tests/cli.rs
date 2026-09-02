@@ -462,6 +462,76 @@ fn reports_invalid_utf8_standard_input_with_source_context() {
     );
 }
 
+#[test]
+fn evaluates_the_bool_and_string_conversion_builtins() {
+    let output = run_cli(&["bool_to_string(3 > 2)"]);
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"true\n");
+
+    let output = run_cli(&["string_to_bool(bool_to_string(false))"]);
+
+    assert!(output.status.success());
+    assert_eq!(output.stdout, b"false\n");
+}
+
+#[test]
+fn reports_invalid_boolean_text_from_a_file_with_positions() {
+    let source = TemporarySource::new(b"string_to_bool(\"yes\")");
+    let output = run_cli(&["--positions", "-f", source.as_str()]);
+
+    assert!(!output.status.success());
+    assert_eq!(
+        output.stderr,
+        concat!(
+            "error: invalid boolean text: 'yes'\n",
+            " at line 1, column 1\n",
+            " | string_to_bool(\"yes\")\n",
+            " | ^"
+        )
+        .as_bytes()
+    );
+}
+
+#[test]
+fn reports_invalid_boolean_text_as_json() {
+    let output = run_cli(&["--json", "string_to_bool(\" True\")"]);
+
+    assert!(!output.status.success());
+    assert_eq!(
+        output.stdout,
+        b"{\"ok\":false,\"error\":\"invalid boolean text: ' True'\",\"line\":1,\"column\":1}\n"
+    );
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn rejects_builtin_calls_with_wrong_types_and_arities() {
+    let output = run_cli(&["bool_to_string(1)"]);
+
+    assert!(!output.status.success());
+    assert_eq!(
+        output.stderr,
+        b"error: type mismatch in call to 'bool_to_string': expected argument 1 to be boolean, found integer\n"
+    );
+
+    let output = run_cli(&["string_to_bool(\"a\", \"b\")"]);
+
+    assert!(!output.status.success());
+    assert_eq!(
+        output.stderr,
+        b"error: wrong number of arguments for function 'string_to_bool': expected 1, found 2\n"
+    );
+
+    let output = run_cli(&["fn string_to_bool() = { true }; 1"]);
+
+    assert!(!output.status.success());
+    assert_eq!(
+        output.stderr,
+        b"error: duplicate function declaration: 'string_to_bool'\n"
+    );
+}
+
 fn expected_help() -> String {
     concat!(
         "Usage: rusty-buggy-language \"<program>\"\n",
@@ -474,7 +544,7 @@ fn expected_help() -> String {
         "       rusty-buggy-language [--positions] [--input-limit <bytes>] [--json] -f <path> | --file <path>\n",
         "       rusty-buggy-language [--positions] [--input-limit <bytes>] [--json] --stdin\n",
         "\n",
-        "Evaluates an expression program with immutable let bindings, integers, booleans (true/false, !, &&, ||), strings (\"...\" with \\n, \\t, \\\\, and \\\" escapes), if/else expressions with { } blocks, function declarations (fn name(param, ...) = { body }; with recursive calls), built-in functions (len, int_to_string, string_to_int, bool_to_int, int_to_bool), comparisons (<, <=, >, >=, ==, !=; <, <=, >, >= also order strings), +, -, *, /, %, // and /* */ comments, parentheses, and prefix -.\n",
+        "Evaluates an expression program with immutable let bindings, integers, booleans (true/false, !, &&, ||), strings (\"...\" with \\n, \\t, \\\\, and \\\" escapes), if/else expressions with { } blocks, function declarations (fn name(param, ...) = { body }; with recursive calls), built-in functions (len, int_to_string, string_to_int, bool_to_int, int_to_bool, bool_to_string, string_to_bool), comparisons (<, <=, >, >=, ==, !=; <, <=, >, >= also order strings), +, -, *, /, %, // and /* */ comments, parentheses, and prefix -.\n",
         "\n",
         "The program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input. Source modes are mutually exclusive. `--repl` reads one program per line from standard input and prints each result.\n",
         "\n",

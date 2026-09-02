@@ -35,8 +35,10 @@ pushes to `main`, on pull requests, and on demand from the Actions tab
 (`workflow_dispatch`). It also compiles and tests the package
 with Rust 1.70, the project's minimum supported Rust version (MSRV), so new
 changes must remain compatible with both stable Rust and the MSRV. A separate
-semver job compares the public library API against the v2.0.0 baseline tag
-with `cargo-semver-checks`, failing on any change that would break the v2
+semver job compares the public library API against the configured release
+baseline tag with `cargo-semver-checks`, falling back to the highest existing
+tag while a release-preparation commit's baseline tag does not exist yet, and
+failing on any change that would break the v2
 series backward-compatibility commitment. In the maintainer environment, Rust
 checks, builds, and tests must run through GitHub Actions rather than
 locally. Use `gh run` to monitor the workflow and inspect its logs.

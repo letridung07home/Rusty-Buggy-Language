@@ -14,8 +14,8 @@ and `%` with checked signed 64-bit arithmetic, `if`/`else` expressions with
 `{ }` blocks and lexical scoping, function declarations
 (`fn name(param, ...) = { ... };`) with recursive calls and monomorphic type
 inference, the built-in functions `len`, `int_to_string`, `string_to_int`,
-`bool_to_int`, and `int_to_bool`, and `//` line comments and `/* */` block
-comments. Comparisons produce real booleans, `<`/`<=`/`>`/`>=` also compare
+`bool_to_int`, `int_to_bool`, `bool_to_string`, and `string_to_bool`, and `//`
+line comments and `/* */` block Comparisons produce real booleans, `<`/`<=`/`>`/`>=` also compare
 two strings lexicographically, `+` concatenates strings, and a static type
 checker rejects ill-typed programs before evaluation.
 

@@ -4,8 +4,9 @@
 //! For a deterministic number of random cases, a generator builds a
 //! well-typed expression (or a program of immutable `let` bindings ending in
 //! an expression) over integers, booleans, and strings, with calls to the
-//! five fixed-signature builtins (`len`, `int_to_string`, `string_to_int`,
-//! `bool_to_int`, `int_to_bool`) and lexicographic string ordering woven in
+//! seven fixed-signature builtins (`len`, `int_to_string`, `string_to_int`,
+//! `bool_to_int`, `int_to_bool`, `bool_to_string`, `string_to_bool`) and
+//! lexicographic string ordering woven in
 //! like any other node. It renders the tree back to source text with minimal
 //! parentheses that respect the language's precedence and associativity, and
 //! then requires the lexer/parser/type-checker/evaluator pipeline and a
@@ -26,7 +27,8 @@ const LITERAL_BOUND: i64 = 50;
 /// the lexer supports so the render/parse round trip is exercised. The
 /// numeric texts feed `string_to_int`'s success paths directly, with leading
 /// zeros and the exact `i64::MIN` boundary alongside texts (`+5`, a leading
-/// space, an `i64` overflow) that both sides must reject.
+/// space, an `i64` overflow) that both sides must reject, plus the exact
+/// `true`/`false` texts `string_to_bool` accepts.
 const STRING_POOL: &[&str] = &[
     "",
     "hello",
@@ -40,6 +42,8 @@ const STRING_POOL: &[&str] = &[
     "007",
     "9223372036854775808",
     "-9223372036854775808",
+    "true",
+    "false",
 ];
 
 /// The number of declaration expressions generated ahead of the final one.
@@ -47,8 +51,8 @@ const MAX_DECLARATIONS: usize = 3;
 
 /// Percent chance that an interior expression is generated as a builtin call
 /// instead of an operator node, per result type: integer-typed expressions
-/// have three builtins to pick from, string-typed ones one, and boolean-typed
-/// ones one. The values keep builtin calls frequent while the pre-existing
+/// have three builtins to pick from, and string- and boolean-typed ones two
+/// each. The values keep builtin calls frequent while the pre-existing
 /// node kinds retain most of their original share.
 const INT_BUILTIN_CHANCE: u64 = 35;
 const BOOL_BUILTIN_CHANCE: u64 = 25;
@@ -108,7 +112,7 @@ enum BinaryOp {
     NotEqual,
 }
 
-/// The five fixed-signature builtin functions the language provides. The
+/// The seven fixed-signature builtin functions the language provides. The
 /// generator picks them by result type and recurses with the argument type
 /// the type checker demands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,6 +122,8 @@ enum Builtin {
     StringToInt,
     BoolToInt,
     IntToBool,
+    BoolToString,
+    StringToBool,
 }
 
 impl Builtin {
@@ -129,15 +135,17 @@ impl Builtin {
             Builtin::StringToInt => "string_to_int",
             Builtin::BoolToInt => "bool_to_int",
             Builtin::IntToBool => "int_to_bool",
+            Builtin::BoolToString => "bool_to_string",
+            Builtin::StringToBool => "string_to_bool",
         }
     }
 
     /// The static type the call's single argument must have.
     fn argument_type(self) -> GenType {
         match self {
-            Builtin::Len | Builtin::StringToInt => GenType::Str,
+            Builtin::Len | Builtin::StringToInt | Builtin::StringToBool => GenType::Str,
             Builtin::IntToString | Builtin::IntToBool => GenType::Int,
-            Builtin::BoolToInt => GenType::Bool,
+            Builtin::BoolToInt | Builtin::BoolToString => GenType::Bool,
         }
     }
 }
@@ -295,7 +303,7 @@ fn render(expr: &Expr) -> String {
 /// semantics: checked `i64` arithmetic, string concatenation, the
 /// fixed-signature builtins (character-count `len`, `Display`-rendered
 /// `int_to_string`, the strict `string_to_int` grammar, and the `bool`/`int`
-/// conversions), short-circuiting logical operators, `if`/`else` branch
+/// and `bool`/`string` conversions), short-circuiting logical operators, `if`/`else` branch
 /// selection, and integer or lexicographic string ordering. Returns `None`
 /// when evaluation fails; callers only compare the Ok/Err decision and, for
 /// successes, the value.
@@ -352,6 +360,15 @@ fn reference_eval(expr: &Expr, values: &HashMap<String, RefValue>) -> Option<Ref
                 }
                 (Builtin::BoolToInt, RefValue::Bool(flag)) => Some(RefValue::Int(i64::from(flag))),
                 (Builtin::IntToBool, RefValue::Int(value)) => Some(RefValue::Bool(value != 0)),
+                (Builtin::BoolToString, RefValue::Bool(flag)) => {
+                    let text = if flag { "true" } else { "false" };
+                    Some(RefValue::Str(text.to_owned()))
+                }
+                (Builtin::StringToBool, RefValue::Str(text)) => match text.as_str() {
+                    "true" => Some(RefValue::Bool(true)),
+                    "false" => Some(RefValue::Bool(false)),
+                    _ => None,
+                },
                 _ => None,
             }
         }
@@ -528,7 +545,12 @@ fn random_expr(prng: &mut Prng, depth: u32, target: GenType, names: &[(String, G
         }
         GenType::Bool => {
             if prng.chance(BOOL_BUILTIN_CHANCE) {
-                random_builtin_call(prng, depth, Builtin::IntToBool, names)
+                let builtin = if prng.below(2) == 0 {
+                    Builtin::IntToBool
+                } else {
+                    Builtin::BoolToString
+                };
+                random_builtin_call(prng, depth, builtin, names)
             } else {
                 match prng.below(7) {
                     0 => Expr::Not(Box::new(random_expr(prng, depth - 1, GenType::Bool, names))),
@@ -549,7 +571,12 @@ fn random_expr(prng: &mut Prng, depth: u32, target: GenType, names: &[(String, G
         }
         GenType::Str => {
             if prng.chance(STR_BUILTIN_CHANCE) {
-                random_builtin_call(prng, depth, Builtin::IntToString, names)
+                let builtin = if prng.below(2) == 0 {
+                    Builtin::IntToString
+                } else {
+                    Builtin::StringToBool
+                };
+                random_builtin_call(prng, depth, builtin, names)
             } else {
                 match prng.below(4) {
                     0 => Expr::Binary {
@@ -751,4 +778,20 @@ fn reference_integer_parser_tracks_the_builtin_grammar() {
     assert_eq!(parse_reference_integer("1a"), None);
     assert_eq!(parse_reference_integer("9223372036854775808"), None);
     assert_eq!(parse_reference_integer("-9223372036854775809"), None);
+}
+
+/// Pins both sides to `string_to_bool`'s grammar at the boundaries the random
+/// generator may not reach within a given seed: only the exact texts `true`
+/// and `false` are accepted, with no whitespace, case, or numeric tolerance.
+#[test]
+fn string_to_bool_boundary_texts_agree_with_the_reference() {
+    for text in ["true", "false", "True", "FALSE", " true", "true ", "1", "", "tr ue"] {
+        let source = format!("string_to_bool(\"{text}\")");
+        let expected = match text {
+            "true" => Some(RefValue::Bool(true)),
+            "false" => Some(RefValue::Bool(false)),
+            _ => None,
+        };
+        assert_agrees(&source, expected);
+    }
 }

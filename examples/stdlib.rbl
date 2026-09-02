@@ -1,11 +1,15 @@
 // Standard-library builtins: len, int_to_string, string_to_int, bool_to_int,
-// and int_to_bool. The ordering comparisons <, <=, >, >= also compare two
-// strings lexicographically by Unicode scalar value.
+// int_to_bool, bool_to_string, and string_to_bool. The ordering comparisons
+// <, <=, >, >= also compare two strings lexicographically by Unicode scalar
+// value.
 // Run with: cargo run -- --file examples/stdlib.rbl
 let count = len("héllo");                    // 5: characters, not UTF-8 bytes
 let text = int_to_string(-12);               // "-12"
 let number = string_to_int("007");           // 7: leading zeros accepted
 let flag = int_to_bool(bool_to_int(1 < 2));  // true: 1 is true, 0 is false
+let shown = bool_to_string(flag);            // "true": boolean literal spelling
+let parsed = string_to_bool("false");        // false: only "true"/"false" accepted
 let ordered = "apple" < "banana";            // true: lexicographic order
 
-count == 5 && text == "-12" && number == 7 && flag && ordered && "a" <= "a"
+count == 5 && text == "-12" && number == 7 && flag
+  && shown == "true" && !parsed && ordered && "a" <= "a"

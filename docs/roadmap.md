@@ -201,6 +201,9 @@ on completion. Developers choose which tasks ship in each release.
   without parsing prose. (shipped in v2.4.0)
 - [x] Improve error rendering: `--positions` gains a source snippet showing
   the offending line with a caret under the error column. (shipped in v2.5.0)
+- [x] Add the boolean↔string conversion builtins `bool_to_string` and
+  `string_to_bool`, completing the conversion matrix across integers,
+  booleans, and strings. (shipped in v2.6.0)
 
 **Stability and distribution**
 

@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-09-02
+
+### Added
+
+- Added two boolean-conversion builtins: `bool_to_string(b)` returns the text
+  `"true"` or `"false"`, matching the boolean literal spelling, and
+  `string_to_bool(s)` parses that text back — accepting exactly `"true"` or
+  `"false"` and reporting the positioned error `invalid boolean text:
+  '<text>'` at the call for anything else (no case folding, no surrounding
+  whitespace, no numeric tolerance), so `bool_to_string` and `string_to_bool`
+  round-trip every boolean just as `int_to_string` and `string_to_int`
+  round-trip every integer. Builtins keep their fixed signatures: declaring a
+  user function with either new name is rejected with
+  `duplicate function declaration: '<name>'`.
+
+### Changed
+
+- The CI semver job now falls back to the highest existing `v*` tag when its
+  configured baseline tag does not exist yet. A release-preparation commit
+  bumps the baseline to the upcoming tag before the tag is pushed, which
+  previously failed the `main`-branch CI run; the fallback keeps the
+  backward-compatibility check meaningful on both sides of a release without
+  changing the tag-time behavior.
+
 ## [2.5.0] - 2026-09-02
 
 ### Added

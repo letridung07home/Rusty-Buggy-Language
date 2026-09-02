@@ -99,7 +99,9 @@ source selection and complete UTF-8 input read
   runs the full test suite in release mode (`cargo test --release`) so the
   shipped binaries are exercised without debug assertions, and a `semver`
   job checks the public library API with `cargo-semver-checks` against the
-  v2.0.0 tag as the backward-compatibility baseline, so later 2.x releases
+  configured release tag as the backward-compatibility baseline (falling back
+  to the highest existing tag while a release-preparation commit's baseline
+  tag does not exist yet), so later 2.x releases
   stay compatible with the v2 contract. Runs for the same branch or pull
   request cancel the previous in-flight run, so a newer push supersedes a
   stale one.

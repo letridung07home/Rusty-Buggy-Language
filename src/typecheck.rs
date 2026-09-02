@@ -16,9 +16,10 @@
 //! stays `Unknown` after convergence and is rejected as an inference failure.
 //!
 //! Calls to the fixed-signature builtin functions (`len`, `int_to_string`,
-//! `string_to_int`, `bool_to_int`, `int_to_bool`) are not inferred at all: they
-//! are checked directly against the builtin table, and a user function may not
-//! take a builtin's name.
+//! `string_to_int`, `bool_to_int`, `int_to_bool`, `bool_to_string`,
+//! `string_to_bool`) are not inferred at all: they are checked directly
+//! against the builtin table, and a user function may not take a builtin's
+//! name.
 
 use std::collections::HashMap;
 
@@ -145,6 +146,16 @@ const BUILTINS: &[Builtin] = &[
     Builtin {
         name: "int_to_bool",
         parameter_types: &[Type::Int],
+        result_type: Type::Bool,
+    },
+    Builtin {
+        name: "bool_to_string",
+        parameter_types: &[Type::Bool],
+        result_type: Type::String,
+    },
+    Builtin {
+        name: "string_to_bool",
+        parameter_types: &[Type::String],
         result_type: Type::Bool,
     },
 ];
@@ -1217,6 +1228,10 @@ mod tests {
             check_error("string_to_int()"),
             "wrong number of arguments for function 'string_to_int': expected 1, found 0"
         );
+        assert_eq!(
+            check_error("bool_to_string(true, false)"),
+            "wrong number of arguments for function 'bool_to_string': expected 1, found 2"
+        );
     }
 
     #[test]
@@ -1237,6 +1252,14 @@ mod tests {
             check_error("int_to_bool(true)"),
             "type mismatch in call to 'int_to_bool': expected argument 1 to be integer, found boolean"
         );
+        assert_eq!(
+            check_error("bool_to_string(1)"),
+            "type mismatch in call to 'bool_to_string': expected argument 1 to be boolean, found integer"
+        );
+        assert_eq!(
+            check_error("string_to_bool(true)"),
+            "type mismatch in call to 'string_to_bool': expected argument 1 to be string, found boolean"
+        );
     }
 
     #[test]
@@ -1251,6 +1274,12 @@ mod tests {
         );
         // A builtin argument demand pins through any pass-through parameter.
         accepts("fn f(x) = { string_to_int(x) }; f(\"42\")");
+        accepts("fn f(x) = { string_to_bool(x) }; f(\"true\")");
+        assert_eq!(
+            check_error("fn f(x) = { string_to_bool(x) }; f(1)"),
+            "type mismatch in call to 'f': expected argument 1 to be string, found integer"
+        );
+        accepts("fn f(x) = { bool_to_string(x) }; f(false)");
     }
 
     #[test]

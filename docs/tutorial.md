@@ -186,7 +186,7 @@ type error reported before evaluation.
 
 ## Standard library functions
 
-Five built-in functions cover common string and number conversions:
+Seven built-in functions cover common string, number, and boolean conversions:
 
 ```bash
 cargo run -- "len(\"hello\")"
@@ -203,6 +203,12 @@ cargo run -- "bool_to_int(3 > 2)"
 
 cargo run -- "int_to_bool(0)"
 # false
+
+cargo run -- "bool_to_string(3 > 2)"
+# true
+
+cargo run -- "string_to_bool(\"false\")"
+# false
 ```
 
 `len` counts characters (Unicode scalar values), not UTF-8 bytes, so
@@ -211,6 +217,11 @@ followed by ASCII digits — leading zeros included — and reports
 `invalid integer text: '...'` for anything else, such as
 `string_to_int(" 42")` or `string_to_int("+1")`. The two are inverses, so
 `string_to_int(int_to_string(7))` is `7`.
+
+`bool_to_string` prints `"true"` or `"false"`, and `string_to_bool` accepts
+only those exact texts — `string_to_bool("True")` or `string_to_bool(" 1")`
+reports `invalid boolean text: '...'`. The two are inverses, so
+`string_to_bool(bool_to_string(3 > 2))` is `true`.
 
 The ordering comparisons also compare strings lexicographically:
 

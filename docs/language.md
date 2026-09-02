@@ -256,7 +256,7 @@ exhaust the stack.
 
 ## Standard library functions
 
-Five built-in functions are always available with fixed signatures:
+Seven built-in functions are always available with fixed signatures:
 
 | Function | Signature | Behavior |
 | --- | --- | --- |
@@ -265,6 +265,8 @@ Five built-in functions are always available with fixed signatures:
 | `string_to_int` | `string_to_int(String) -> Int` | Parses the decimal text produced by `int_to_string` back into an integer. |
 | `bool_to_int` | `bool_to_int(Bool) -> Int` | `1` for `true` and `0` for `false`. |
 | `int_to_bool` | `int_to_bool(Int) -> Bool` | `false` for `0` and `true` for any other integer. |
+| `bool_to_string` | `bool_to_string(Bool) -> String` | The text `"true"` or `"false"`, matching the boolean literal spelling. |
+| `string_to_bool` | `string_to_bool(String) -> Bool` | Parses the text produced by `bool_to_string` back into a boolean. |
 
 `string_to_int` accepts only an optional leading `-` followed by one or more
 ASCII decimal digits:
@@ -278,6 +280,13 @@ a lone `-`, and magnitudes outside the signed 64-bit range are rejected with
 the positioned error `invalid integer text: '<text>'` at the call site; for
 example, `string_to_int(" 12")` and `string_to_int("+1")` are errors, while
 `string_to_int(int_to_string(n))` round-trips every integer.
+
+`string_to_bool` accepts only the exact texts `"true"` and `"false"`: any
+other text — different case, surrounding whitespace, a lone `1`/`0`, or an
+empty string — is rejected with the positioned error `invalid boolean text:
+'<text>'` at the call site; for example, `string_to_bool("True")` and
+`string_to_bool(" true")` are errors, while
+`string_to_bool(bool_to_string(b))` round-trips every boolean.
 
 Builtins are recognized by name and are not ordinary values. A user function
 cannot take a builtin's name, so `fn len(s) = { 0 };` reports `duplicate
@@ -385,6 +394,8 @@ standard error, prints no result, and exits unsuccessfully. Errors include:
   at call sites;
 - a `string_to_int` argument that does not match the accepted integer text,
   reported as `invalid integer text: '<text>'`;
+- a `string_to_bool` argument that is not exactly `"true"` or `"false"`,
+  reported as `invalid boolean text: '<text>'`;
 - function parameters or results whose types cannot be inferred from any body
   or call site;
 - type errors such as mixing operands of different types, a non-boolean `if`

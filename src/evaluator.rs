@@ -355,7 +355,8 @@ fn evaluate_call(
 }
 
 /// Evaluates a call to a fixed-signature builtin function (`len`,
-/// `int_to_string`, `string_to_int`, `bool_to_int`, `int_to_bool`), mirroring
+/// `int_to_string`, `string_to_int`, `bool_to_int`, `int_to_bool`,
+/// `bool_to_string`, `string_to_bool`), mirroring
 /// the user-function runtime defenses with the builtin's name substituted. The
 /// call itself adds no evaluation frame, so it consumes no call depth.
 fn evaluate_builtin_call(
@@ -417,6 +418,20 @@ fn evaluate_builtin_call(
         },
         ("bool_to_int", [Value::Bool(flag)]) => Value::Int(i64::from(*flag)),
         ("int_to_bool", [Value::Int(value)]) => Value::Bool(*value != 0),
+        ("bool_to_string", [Value::Bool(flag)]) => {
+            let text = if *flag { "true" } else { "false" };
+            Value::String(text.to_owned())
+        }
+        ("string_to_bool", [Value::String(text)]) => match text.as_str() {
+            "true" => Value::Bool(true),
+            "false" => Value::Bool(false),
+            _ => {
+                return Err(positioned_error(
+                    format!("invalid boolean text: '{text}'"),
+                    position,
+                ))
+            }
+        },
         _ => unreachable!("the signature defenses above cover every builtin"),
     })
 }
@@ -1207,6 +1222,36 @@ mod tests {
     }
 
     #[test]
+    fn evaluates_the_bool_and_string_conversion_builtins() {
+        assert_eq!(evaluate_source("bool_to_string(true)"), Ok(string("true")));
+        assert_eq!(evaluate_source("bool_to_string(false)"), Ok(string("false")));
+        assert_eq!(evaluate_source("string_to_bool(\"true\")"), Ok(boolean(true)));
+        assert_eq!(evaluate_source("string_to_bool(\"false\")"), Ok(boolean(false)));
+    }
+
+    #[test]
+    fn string_to_bool_rejects_invalid_text() {
+        for text in [
+            "",
+            "True",
+            "FALSE",
+            " true",
+            "true ",
+            "1",
+            "0",
+            "yes",
+            "tru",
+        ] {
+            let source = format!("string_to_bool(\"{text}\")");
+            assert_eq!(
+                error_message(&source),
+                format!("invalid boolean text: '{text}'"),
+                "source: {source}"
+            );
+        }
+    }
+
+    #[test]
     fn evaluates_string_ordering_comparisons() {
         assert_eq!(evaluate_source("\"abc\" < \"abd\""), Ok(boolean(true)));
         assert_eq!(evaluate_source("\"b\" > \"a\""), Ok(boolean(true)));
@@ -1221,6 +1266,18 @@ mod tests {
         assert_eq!(
             evaluate_source("string_to_int(int_to_string(-42))"),
             Ok(int(-42))
+        );
+    }
+
+    #[test]
+    fn round_trips_booleans_through_the_string_builtins() {
+        assert_eq!(
+            evaluate_source("string_to_bool(bool_to_string(3 > 2))"),
+            Ok(boolean(true))
+        );
+        assert_eq!(
+            evaluate_source("string_to_bool(bool_to_string(!true))"),
+            Ok(boolean(false))
         );
     }
 }
