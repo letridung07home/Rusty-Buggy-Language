@@ -72,6 +72,8 @@ cargo run -- --repl
 cargo run -- --positions "8 / (3 - 3)"
 # error: division by zero
 #  at line 1, column 3
+#  | 8 / (3 - 3)
+#  |   ^
 
 cargo run -- --json "1 + 2"
 # {"ok":true,"value":3,"type":"integer"}
@@ -90,7 +92,8 @@ sources are read in full as UTF-8 and passed unchanged to the same evaluator as
 inline programs, while `--repl` reads one program per line and prints each
 result. The evaluator guards against oversized input (configurable
 with `--input-limit <bytes>`) and excessively nested programs, and `--positions`
-adds line and column information to errors. The `--json` flag switches output
+adds line and column information to errors along with a source snippet showing
+the offending line with a caret under the error column. The `--json` flag switches output
 to one machine-readable JSON document per run (`{"ok":true,...}` or
 `{"ok":false,...}` with error position), designed for agent consumption. See
 the docs links below for details.

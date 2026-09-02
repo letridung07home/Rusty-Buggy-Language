@@ -253,7 +253,7 @@ fn reports_type_errors_with_positions() {
     assert!(output.stdout.is_empty());
     assert_eq!(
         output.stderr,
-        b"error: type mismatch in '+': expected two integers or two strings, found integer and boolean\n at line 1, column 3\n"
+        b"error: type mismatch in '+': expected two integers or two strings, found integer and boolean\n at line 1, column 3\n | 1 + true\n |   ^\n"
     );
 }
 
@@ -323,7 +323,7 @@ fn positions_flag_reports_modulo_error_position() {
     assert!(output.stdout.is_empty());
     assert_eq!(
         output.stderr,
-        b"error: division by zero\n at line 1, column 3\n"
+        b"error: division by zero\n at line 1, column 3\n | 8 % (3 - 3)\n |   ^\n"
     );
 }
 
@@ -479,6 +479,8 @@ fn expected_help() -> String {
         "The program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input. Source modes are mutually exclusive. `--repl` reads one program per line from standard input and prints each result.\n",
         "\n",
         "--positions      Also report the line and column of evaluation or syntax errors.\n",
+        "                 Prose errors then show the offending source line with a caret\n",
+        "                 (^) under the error column.\n",
         "--input-limit N  Reject programs longer than N bytes before evaluation.\n",
         "--json           Print one machine-readable JSON document on stdout instead of\n",
         "                 prose: {\"ok\":true,\"value\":...,\"type\":...} on success or\n",
@@ -579,7 +581,7 @@ fn positions_flag_reports_line_and_column_for_evaluation_errors() {
     assert!(output.stdout.is_empty());
     assert_eq!(
         output.stderr,
-        b"error: division by zero\n at line 1, column 3\n"
+        b"error: division by zero\n at line 1, column 3\n | 8 / (3 - 3)\n |   ^\n"
     );
 }
 
@@ -600,9 +602,50 @@ fn positions_flag_reports_line_and_column_after_newlines() {
     assert!(output.stdout.is_empty());
     assert_eq!(
         output.stderr,
-        b"error: undefined variable: 'missing'\n at line 2, column 2\n"
+        b"error: undefined variable: 'missing'\n at line 2, column 2\n |  missing + 1\n |  ^\n"
     );
 }
+
+#[test]
+fn positions_snippet_works_with_stdin_source() {
+    let output = run_cli_with_stdin(&["--positions", "--stdin"], b"1 + 2 3");
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        output.stderr,
+        b"error: unexpected trailing token: integer literal\n at line 1, column 7\n | 1 + 2 3\n |       ^\n"
+    );
+}
+
+#[test]
+fn positions_snippet_works_with_file_source() {
+    let source = TemporarySource::new(b"let rate = 20;\nrate * quantity");
+    let output = run_cli(&["--positions", "--file", source.as_str()]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        output.stderr,
+        b"error: undefined variable: 'quantity'\n at line 2, column 8\n | rate * quantity\n |        ^\n"
+    );
+}
+
+#[test]
+fn positions_snippet_strips_crlf_line_endings() {
+    let source = TemporarySource::new(b"1 + 2 3\r\n");
+    let output = run_cli(&["--positions", "--file", source.as_str()]);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(
+        output.stderr,
+        b"error: unexpected trailing token: integer literal\n at line 1, column 7\n | 1 + 2 3\n |       ^\n"
+    );
+}
+
+#[test]
+fn json_flag_ignores_positions_flag_for_output_shape() {
 
 #[test]
 fn input_limit_flag_rejects_oversized_inline_programs() {

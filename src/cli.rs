@@ -6,7 +6,9 @@ use std::process::ExitCode;
 
 use rusty_buggy_language::{evaluate_with_limits, Error, Limits, Value};
 
-const HELP: &str = "Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -f <path> | --file <path>\n       rusty-buggy-language --stdin\n       rusty-buggy-language --repl\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n       rusty-buggy-language [--positions] [--input-limit <bytes>] [--json] <program>\n       rusty-buggy-language [--positions] [--input-limit <bytes>] [--json] -f <path> | --file <path>\n       rusty-buggy-language [--positions] [--input-limit <bytes>] [--json] --stdin\n\nEvaluates an expression program with immutable let bindings, integers, booleans (true/false, !, &&, ||), strings (\"...\" with \\n, \\t, \\\\, and \\\" escapes), if/else expressions with { } blocks, function declarations (fn name(param, ...) = { body }; with recursive calls), built-in functions (len, int_to_string, string_to_int, bool_to_int, int_to_bool), comparisons (<, <=, >, >=, ==, !=; <, <=, >, >= also order strings), +, -, *, /, %, // and /* */ comments, parentheses, and prefix -.\n\nThe program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input. Source modes are mutually exclusive. `--repl` reads one program per line from standard input and prints each result.\n\n--positions      Also report the line and column of evaluation or syntax errors.\n--input-limit N  Reject programs longer than N bytes before evaluation.\n--json           Print one machine-readable JSON document on stdout instead of\n                 prose: {\"ok\":true,\"value\":...,\"type\":...} on success or\n                 {\"ok\":false,\"error\":...[,\"line\":n,\"column\":n]} on failure.\n                 Exit status still reports failure.";
+const HELP: &str = "Usage: rusty-buggy-language \"<program>\"\n       rusty-buggy-language -f <path> | --file <path>\n       rusty-buggy-language --stdin\n       rusty-buggy-language --repl\n       rusty-buggy-language -h | --help\n       rusty-buggy-language -V | --version\n       rusty-buggy-language [--positions] [--input-limit <bytes>] [--json] <program>\n       rusty-buggy-language [--positions] [--input-limit <bytes>] [--json] -f <path> | --file <path>\n       rusty-buggy-language [--positions] [--input-limit <bytes>] [--json] --stdin\n\nEvaluates an expression program with immutable let bindings, integers, booleans (true/false, !, &&, ||), strings (\"...\" with \\n, \\t, \\\\, and \\\" escapes), if/else expressions with { } blocks, function declarations (fn name(param, ...) = { body }; with recursive calls), built-in functions (len, int_to_string, string_to_int, bool_to_int, int_to_bool), comparisons (<, <=, >, >=, ==, !=; <, <=, >, >= also order strings), +, -, *, /, %, // and /* */ comments, parentheses, and prefix -.\n\nThe program can be supplied inline, read as UTF-8 from a file, or read as UTF-8 from standard input. Source modes are mutually exclusive. `--repl` reads one program per line from standard input and prints each result.\n\n--positions      Also report the line and column of evaluation or syntax errors.
+                 Prose errors then show the offending source line with a caret
+                 (^) under the error column.\n--input-limit N  Reject programs longer than N bytes before evaluation.\n--json           Print one machine-readable JSON document on stdout instead of\n                 prose: {\"ok\":true,\"value\":...,\"type\":...} on success or\n                 {\"ok\":false,\"error\":...[,\"line\":n,\"column\":n]} on failure.\n                 Exit status still reports failure.";
 
 const VERSION: &str = concat!("rusty-buggy-language ", env!("CARGO_PKG_VERSION"));
 
@@ -185,7 +187,7 @@ where
         None => Limits::default(),
     };
 
-    evaluate_source(source, &limits, invocation.positions, invocation.json)
+    evaluate_source(&source, &limits, invocation.positions, invocation.json)
 }
 
 fn read_source<R>(source: SourceArg, reader: &mut R) -> Result<String, String>
@@ -200,12 +202,12 @@ where
 }
 
 fn evaluate_source(
-    source: String,
+    source: &str,
     limits: &Limits,
     positions: bool,
     json: bool,
 ) -> Result<Output, String> {
-    match evaluate_with_limits(&source, limits) {
+    match evaluate_with_limits(source, limits) {
         Ok(value) => {
             if json {
                 Ok(Output::Json {
@@ -223,26 +225,57 @@ fn evaluate_source(
                     ok: false,
                 })
             } else {
-                Err(format_error(&error, positions))
+                Err(format_error(&error, source, positions))
             }
         }
     }
 }
 
-fn format_error(error: &Error, positions: bool) -> String {
+fn format_error(error: &Error, source: &str, positions: bool) -> String {
     if !positions {
         return error.message().to_owned();
     }
 
     match error.position() {
-        Some(position) => format!(
-            "{}\n at line {}, column {}",
-            error.message(),
-            position.line,
-            position.column
-        ),
+        Some(position) => {
+            let mut out = format!(
+                "{}\n at line {}, column {}",
+                error.message(),
+                position.line,
+                position.column
+            );
+            if let Some(snippet) = source_snippet(source, position.line, position.column) {
+                out.push('\n');
+                out.push_str(&snippet);
+            }
+            out
+        }
         None => error.message().to_owned(),
     }
+}
+
+/// Renders the offending source line with a caret under the error column for
+/// the `--positions` output. Returns `None` when the error line is outside
+/// the source, in which case the position suffix alone is reported; a column
+/// past the end of the line clamps the caret to the last character.
+fn source_snippet(source: &str, line: usize, column: usize) -> Option<String> {
+    let line_text = source.split('\n').nth(line.checked_sub(1)?)?;
+    // The lexer counts characters (Unicode scalar values) per line, so the
+    // caret column is char-based. Strip a trailing carriage return left over
+    // from CRLF input so it does not leak into the rendered line.
+    let line_text = line_text.strip_suffix('\r').unwrap_or(line_text);
+    // Columns point at characters, so pad with one space per preceding
+    // character; clamp so a stale or overflowing column still renders.
+    let caret_pad = line_text
+        .chars()
+        .take(column.saturating_sub(1))
+        .count()
+        .min(line_text.chars().count());
+    Some(format!(
+        " | {}\n | {}^",
+        line_text,
+        " ".repeat(caret_pad)
+    ))
 }
 
 /// The message reported when a conflict occurs after `source` was already the
@@ -556,7 +589,53 @@ mod tests {
     fn positions_flag_augments_the_error_output() {
         assert_eq!(
             execute(arguments(&["--positions", "1 + 2 3"])),
-            Err("unexpected trailing token: integer literal\n at line 1, column 7".to_owned())
+            Err(concat!(
+                "unexpected trailing token: integer literal\n at line 1, column 7\n",
+                " | 1 + 2 3\n",
+                " |       ^"
+            )
+            .to_owned())
+        );
+    }
+
+    #[test]
+    fn positions_snippet_reports_the_error_line_in_a_multiline_program() {
+        assert_eq!(
+            execute(arguments(&["--positions", "let x = 1;\n missing + 1"])),
+            Err(concat!(
+                "undefined variable: 'missing'\n at line 2, column 2\n",
+                " |  missing + 1\n",
+                " |  ^"
+            )
+            .to_owned())
+        );
+    }
+
+    #[test]
+    fn positions_snippet_column_points_at_the_offending_token() {
+        assert_eq!(
+            execute(arguments(&["--positions", "8 / (3 - 3)"])),
+            Err(concat!(
+                "division by zero\n at line 1, column 3\n",
+                " | 8 / (3 - 3)\n",
+                " |   ^"
+            )
+            .to_owned())
+        );
+    }
+
+    #[test]
+    fn positions_snippet_survives_a_column_past_the_line_text() {
+        // A stale column beyond the line's characters must not panic; the
+        // caret clamps to the end of the line.
+        assert_eq!(
+            execute(arguments(&["--positions", "1 + 2 3\n"])),
+            Err(concat!(
+                "unexpected trailing token: integer literal\n at line 1, column 7\n",
+                " | 1 + 2 3\n",
+                " |       ^"
+            )
+            .to_owned())
         );
     }
 

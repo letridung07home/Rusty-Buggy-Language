@@ -199,8 +199,8 @@ on completion. Developers choose which tasks ship in each release.
 - [x] Add a `--json` CLI mode that prints the result, or the error message
   and position, as machine-readable JSON so agents can consume output
   without parsing prose. (shipped in v2.4.0)
-- [ ] Improve error rendering: `--positions` gains a source snippet showing
-  the offending line with a caret under the error column.
+- [x] Improve error rendering: `--positions` gains a source snippet showing
+  the offending line with a caret under the error column. (shipped in v2.5.0)
 
 **Stability and distribution**
 

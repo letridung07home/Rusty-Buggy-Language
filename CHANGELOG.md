@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `--positions` error output now includes a source snippet: after the existing
+  `error: <message>` line and ` at line L, column C` suffix, the CLI prints
+  the offending source line prefixed with ` | ` followed by a caret line that
+  places a `^` under the error column, so failures can be read directly in
+  context without opening the source. The snippet renders in every source
+  mode (inline, `-f/--file`, `--stdin`), strips a trailing carriage return
+  from CRLF input, and clamps the caret to the end of the line when the
+  column falls past the last character. Output without `--positions` is
+  unchanged, and `--json` output keeps its own shape.
+
 ## [2.4.0] - 2026-09-02
 
 ### Added
