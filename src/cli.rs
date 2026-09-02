@@ -271,11 +271,7 @@ fn source_snippet(source: &str, line: usize, column: usize) -> Option<String> {
         .take(column.saturating_sub(1))
         .count()
         .min(line_text.chars().count());
-    Some(format!(
-        " | {}\n | {}^",
-        line_text,
-        " ".repeat(caret_pad)
-    ))
+    Some(format!(" | {}\n | {}^", line_text, " ".repeat(caret_pad)))
 }
 
 /// The message reported when a conflict occurs after `source` was already the

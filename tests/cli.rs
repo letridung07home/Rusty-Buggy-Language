@@ -645,9 +645,6 @@ fn positions_snippet_strips_crlf_line_endings() {
 }
 
 #[test]
-fn json_flag_ignores_positions_flag_for_output_shape() {
-
-#[test]
 fn input_limit_flag_rejects_oversized_inline_programs() {
     let output = run_cli(&["--input-limit", "5", "1 + 2 + 3"]);
 
