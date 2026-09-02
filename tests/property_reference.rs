@@ -785,7 +785,9 @@ fn reference_integer_parser_tracks_the_builtin_grammar() {
 /// and `false` are accepted, with no whitespace, case, or numeric tolerance.
 #[test]
 fn string_to_bool_boundary_texts_agree_with_the_reference() {
-    for text in ["true", "false", "True", "FALSE", " true", "true ", "1", "", "tr ue"] {
+    for text in [
+        "true", "false", "True", "FALSE", " true", "true ", "1", "", "tr ue",
+    ] {
         let source = format!("string_to_bool(\"{text}\")");
         let expected = match text {
             "true" => Some(RefValue::Bool(true)),

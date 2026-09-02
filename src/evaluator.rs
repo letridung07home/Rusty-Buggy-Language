@@ -1224,24 +1224,23 @@ mod tests {
     #[test]
     fn evaluates_the_bool_and_string_conversion_builtins() {
         assert_eq!(evaluate_source("bool_to_string(true)"), Ok(string("true")));
-        assert_eq!(evaluate_source("bool_to_string(false)"), Ok(string("false")));
-        assert_eq!(evaluate_source("string_to_bool(\"true\")"), Ok(boolean(true)));
-        assert_eq!(evaluate_source("string_to_bool(\"false\")"), Ok(boolean(false)));
+        assert_eq!(
+            evaluate_source("bool_to_string(false)"),
+            Ok(string("false"))
+        );
+        assert_eq!(
+            evaluate_source("string_to_bool(\"true\")"),
+            Ok(boolean(true))
+        );
+        assert_eq!(
+            evaluate_source("string_to_bool(\"false\")"),
+            Ok(boolean(false))
+        );
     }
 
     #[test]
     fn string_to_bool_rejects_invalid_text() {
-        for text in [
-            "",
-            "True",
-            "FALSE",
-            " true",
-            "true ",
-            "1",
-            "0",
-            "yes",
-            "tru",
-        ] {
+        for text in ["", "True", "FALSE", " true", "true ", "1", "0", "yes", "tru"] {
             let source = format!("string_to_bool(\"{text}\")");
             assert_eq!(
                 error_message(&source),
