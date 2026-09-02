@@ -1240,7 +1240,9 @@ mod tests {
 
     #[test]
     fn string_to_bool_rejects_invalid_text() {
-        for text in ["", "True", "FALSE", " true", "true ", "1", "0", "yes", "tru"] {
+        for text in [
+            "", "True", "FALSE", " true", "true ", "1", "0", "yes", "tru",
+        ] {
             let source = format!("string_to_bool(\"{text}\")");
             assert_eq!(
                 error_message(&source),
