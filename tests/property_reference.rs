@@ -548,7 +548,7 @@ fn random_expr(prng: &mut Prng, depth: u32, target: GenType, names: &[(String, G
                 let builtin = if prng.below(2) == 0 {
                     Builtin::IntToBool
                 } else {
-                    Builtin::BoolToString
+                    Builtin::StringToBool
                 };
                 random_builtin_call(prng, depth, builtin, names)
             } else {
@@ -574,7 +574,7 @@ fn random_expr(prng: &mut Prng, depth: u32, target: GenType, names: &[(String, G
                 let builtin = if prng.below(2) == 0 {
                     Builtin::IntToString
                 } else {
-                    Builtin::StringToBool
+                    Builtin::BoolToString
                 };
                 random_builtin_call(prng, depth, builtin, names)
             } else {
