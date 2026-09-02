@@ -487,7 +487,7 @@ fn reports_invalid_boolean_text_from_a_file_with_positions() {
             "error: invalid boolean text: 'yes'\n",
             " at line 1, column 1\n",
             " | string_to_bool(\"yes\")\n",
-            " | ^"
+            " | ^\n"
         )
         .as_bytes()
     );
