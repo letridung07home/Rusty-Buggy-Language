@@ -1379,12 +1379,24 @@ mod tests {
             Ok(string("el"))
         );
         // An empty range is a valid empty substring.
-        assert_eq!(evaluate_source("substring(\"hello\", 2, 2)"), Ok(string("")));
+        assert_eq!(
+            evaluate_source("substring(\"hello\", 2, 2)"),
+            Ok(string(""))
+        );
         // End may pass the last character: the slice stops at the end.
-        assert_eq!(evaluate_source("substring(\"hello\", 3, 99)"), Ok(string("lo")));
-        assert_eq!(evaluate_source("substring(\"hello\", 5, 99)"), Ok(string("")));
+        assert_eq!(
+            evaluate_source("substring(\"hello\", 3, 99)"),
+            Ok(string("lo"))
+        );
+        assert_eq!(
+            evaluate_source("substring(\"hello\", 5, 99)"),
+            Ok(string(""))
+        );
         // Ranges count Unicode scalar values, like `len`.
-        assert_eq!(evaluate_source("substring(\"héllo\", 1, 3)"), Ok(string("él")));
+        assert_eq!(
+            evaluate_source("substring(\"héllo\", 1, 3)"),
+            Ok(string("él"))
+        );
     }
 
     #[test]
