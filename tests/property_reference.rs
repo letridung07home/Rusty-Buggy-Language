@@ -986,7 +986,7 @@ fn string_index_builtins_agree_with_the_reference_at_boundaries() {
         ("substring(\"hello\", 6, 7)", None),
     ];
     for (source, expected) in cases {
-        assert_agrees(&source, expected);
+        assert_agrees(source, expected);
     }
 }
 
