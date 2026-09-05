@@ -1317,7 +1317,7 @@ mod tests {
     fn rejects_multi_argument_builtin_calls_with_the_wrong_arity() {
         assert_eq!(
             check_error("substring(\"ab\", 0)"),
-            "wrong number of arguments for function 'substring': expected 3, found 1"
+            "wrong number of arguments for function 'substring': expected 3, found 2"
         );
         assert_eq!(
             check_error("char_at(\"ab\", 0, 1)"),

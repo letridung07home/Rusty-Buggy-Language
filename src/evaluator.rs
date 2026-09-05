@@ -446,8 +446,17 @@ fn evaluate_builtin_call(
             Value::String(character.to_string())
         }
         ("substring", [Value::String(text), Value::Int(start), Value::Int(end)]) => {
+            let length = text.chars().count();
             let start = index_to_usize(*start, position)?;
             let end = index_to_usize(*end, position)?;
+            // A start bound past the last character is out of range, while an
+            // end bound past it simply stops at the end of the string.
+            if start > length {
+                return Err(positioned_error(
+                    format!("string index out of range: index {start}, length {length}"),
+                    position,
+                ));
+            }
             if start > end {
                 return Err(positioned_error(
                     format!(
@@ -1342,7 +1351,6 @@ mod tests {
         assert_eq!(evaluate_source("char_at(\"hello\", 4)"), Ok(string("o")));
         // Indexes count Unicode scalar values, like `len`, not UTF-8 bytes.
         assert_eq!(evaluate_source("char_at(\"héllo\", 1)"), Ok(string("é")));
-        assert_eq!(evaluate_source("char_at(\"\", 0)"), Ok(string("")));
     }
 
     #[test]
@@ -1355,8 +1363,9 @@ mod tests {
             error_message("char_at(\"hello\", -1)"),
             "string index out of range: index -1"
         );
+        // An empty string has no characters, so every index is out of range.
         assert_eq!(
-            error_message("char_at(\"\", 0) || true"),
+            error_message("char_at(\"\", 0)"),
             "string index out of range: index 0, length 0"
         );
     }
@@ -1397,8 +1406,9 @@ mod tests {
         assert_eq!(evaluate_source("index_of(\"hello\", \"hello\")"), Ok(int(0)));
         // An empty needle matches at the start, mirroring `str::find`.
         assert_eq!(evaluate_source("index_of(\"hello\", \"\")"), Ok(int(0)));
-        // The result counts characters, not UTF-8 bytes.
-        assert_eq!(evaluate_source("index_of(\"héllo\", \"l\")"), Ok(int(3)));
+        // The result counts characters, not UTF-8 bytes: the first `l` sits
+        // after `h` and `é`.
+        assert_eq!(evaluate_source("index_of(\"héllo\", \"l\")"), Ok(int(2)));
         assert_eq!(evaluate_source("index_of(\"hello\", \"world\")"), Ok(int(-1)));
         assert_eq!(evaluate_source("index_of(\"\", \"a\")"), Ok(int(-1)));
     }

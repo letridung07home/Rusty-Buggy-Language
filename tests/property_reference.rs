@@ -422,7 +422,14 @@ fn reference_eval(expr: &Expr, values: &HashMap<String, RefValue>) -> Option<Ref
                     Builtin::Substring,
                     [RefValue::Str(text), RefValue::Int(start), RefValue::Int(end)],
                 ) => {
-                    if *start < 0 || *end < 0 || start > end {
+                    // A start bound past the last character is out of range,
+                    // mirroring the evaluator; an end bound past it stops at
+                    // the end of the string.
+                    if *start < 0
+                        || *end < 0
+                        || *start > text.chars().count() as i64
+                        || start > end
+                    {
                         return None;
                     }
                     Some(RefValue::Str(
@@ -963,6 +970,7 @@ fn string_index_builtins_agree_with_the_reference_at_boundaries() {
         ("char_at(\"hello\", 5)", None),
         ("char_at(\"hello\", -1)", None),
         ("char_at(\"\", 0)", None),
+        ("char_at(\"\", -2)", None),
         (
             "substring(\"hello\", 1, 3)",
             Some(RefValue::Str("el".to_owned())),
@@ -998,7 +1006,7 @@ fn string_search_and_case_builtins_agree_with_the_reference_at_boundaries() {
         ("index_of(\"hello\", \"ell\")", Some(RefValue::Int(1))),
         ("index_of(\"hello\", \"z\")", Some(RefValue::Int(-1))),
         ("index_of(\"hello\", \"\")", Some(RefValue::Int(0))),
-        ("index_of(\"héllo\", \"l\")", Some(RefValue::Int(3))),
+        ("index_of(\"héllo\", \"l\")", Some(RefValue::Int(2))),
         ("index_of(\"\", \"a\")", Some(RefValue::Int(-1))),
         (
             "trim(\"  hi  \")",
