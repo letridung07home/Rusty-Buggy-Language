@@ -1010,6 +1010,6 @@ fn string_search_and_case_builtins_agree_with_the_reference_at_boundaries() {
         ("upper(\"café\")", Some(RefValue::Str("CAFÉ".to_owned()))),
     ];
     for (source, expected) in cases {
-        assert_agrees(&source, expected);
+        assert_agrees(source, expected);
     }
 }
