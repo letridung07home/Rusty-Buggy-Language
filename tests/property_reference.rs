@@ -700,7 +700,7 @@ fn random_builtin_call(
         Builtin::CharAt => {
             let text = random_expr(prng, depth - 1, GenType::Str, names);
             let index = random_expr(prng, depth - 1, GenType::Int, names);
-            let clamped = clamped_index(index, &text);
+            let clamped = clamped_index(&index, &text);
             Expr::Call {
                 builtin,
                 arguments: vec![text, clamped],
@@ -710,14 +710,14 @@ fn random_builtin_call(
             let text = random_expr(prng, depth - 1, GenType::Str, names);
             let start_index = random_expr(prng, depth - 1, GenType::Int, names);
             let end_index = random_expr(prng, depth - 1, GenType::Int, names);
-            let start = clamped_index(start_index, &text);
+            let start = clamped_index(&start_index, &text);
             // Adding the clamped offset to the start keeps `start <= end`
             // structurally true, and an end past the text is a legal
             // end-exclusive slice that stops at the last character.
             let end = Expr::Binary {
                 op: BinaryOp::Add,
                 left: Box::new(start.clone()),
-                right: Box::new(clamped_index(end_index, &text)),
+                right: Box::new(clamped_index(&end_index, &text)),
             };
             Expr::Call {
                 builtin,
@@ -741,7 +741,7 @@ fn random_builtin_call(
 /// rendered source evaluates identically on both sides of the comparison
 /// while usually naming an in-range character position. For an empty text the
 /// fallback `len(text) - 1` is negative, which both sides reject together.
-fn clamped_index(index: Expr, text: &Expr) -> Expr {
+fn clamped_index(index: &Expr, text: &Expr) -> Expr {
     let length = || Expr::Call {
         builtin: Builtin::Len,
         arguments: vec![text.clone()],
@@ -756,10 +756,10 @@ fn clamped_index(index: Expr, text: &Expr) -> Expr {
         else_branch: Box::new(Expr::If {
             condition: Box::new(Expr::Binary {
                 op: BinaryOp::LessThanOrEqual,
-                left: Box::new(index),
+                left: Box::new(index.clone()),
                 right: Box::new(length()),
             }),
-            then_branch: Box::new(index),
+            then_branch: Box::new(index.clone()),
             else_branch: Box::new(Expr::Binary {
                 op: BinaryOp::Subtract,
                 left: Box::new(length()),
@@ -956,7 +956,7 @@ fn string_to_bool_boundary_texts_agree_with_the_reference() {
 /// end-past-the-text slice both sides must truncate identically.
 #[test]
 fn string_index_builtins_agree_with_the_reference_at_boundaries() {
-    let cases: Vec<(String, Option<RefValue>)> = vec![
+    let cases: Vec<(&str, Option<RefValue>)> = vec![
         ("char_at(\"hello\", 0)", Some(RefValue::Str("h".to_owned()))),
         ("char_at(\"hello\", 4)", Some(RefValue::Str("o".to_owned()))),
         ("char_at(\"héllo\", 1)", Some(RefValue::Str("é".to_owned()))),
@@ -994,7 +994,7 @@ fn string_index_builtins_agree_with_the_reference_at_boundaries() {
 /// `-1`, the empty needle's start match, and Unicode case mapping.
 #[test]
 fn string_search_and_case_builtins_agree_with_the_reference_at_boundaries() {
-    let cases: Vec<(String, Option<RefValue>)> = vec![
+    let cases: Vec<(&str, Option<RefValue>)> = vec![
         ("index_of(\"hello\", \"ell\")", Some(RefValue::Int(1))),
         ("index_of(\"hello\", \"z\")", Some(RefValue::Int(-1))),
         ("index_of(\"hello\", \"\")", Some(RefValue::Int(0))),
