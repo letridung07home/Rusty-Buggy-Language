@@ -62,11 +62,11 @@ const MAX_DECLARATIONS: usize = 3;
 
 /// Percent chance that an interior expression is generated as a builtin call
 /// instead of an operator node, per result type: integer-typed expressions
-/// have three builtins to pick from, boolean-typed ones two, and
-/// string-typed ones eight (the two conversions plus the six string
-/// inspection and reshaping builtins). The values keep builtin calls
-/// frequent while the pre-existing node kinds retain most of their original
-/// share.
+/// have four builtins to pick from (including `index_of`, whose result is an
+/// index), boolean-typed ones two, and string-typed ones seven (the two
+/// conversions plus the five string-result inspection and reshaping
+/// builtins). The values keep builtin calls frequent while the pre-existing
+/// node kinds retain most of their original share.
 const INT_BUILTIN_CHANCE: u64 = 35;
 const BOOL_BUILTIN_CHANCE: u64 = 25;
 const STR_BUILTIN_CHANCE: u64 = 30;
@@ -425,11 +425,8 @@ fn reference_eval(expr: &Expr, values: &HashMap<String, RefValue>) -> Option<Ref
                     // A start bound past the last character is out of range,
                     // mirroring the evaluator; an end bound past it stops at
                     // the end of the string.
-                    if *start < 0
-                        || *end < 0
-                        || *start > text.chars().count() as i64
-                        || start > end
-                    {
+                    let length = text.chars().count() as i64;
+                    if *start < 0 || *end < 0 || *start > length || start > end {
                         return None;
                     }
                     Some(RefValue::Str(
@@ -448,12 +445,8 @@ fn reference_eval(expr: &Expr, values: &HashMap<String, RefValue>) -> Option<Ref
                 (Builtin::Trim, [RefValue::Str(text)]) => {
                     Some(RefValue::Str(text.trim().to_owned()))
                 }
-                (Builtin::Upper, [RefValue::Str(text)]) => {
-                    Some(RefValue::Str(text.to_uppercase()))
-                }
-                (Builtin::Lower, [RefValue::Str(text)]) => {
-                    Some(RefValue::Str(text.to_lowercase()))
-                }
+                (Builtin::Upper, [RefValue::Str(text)]) => Some(RefValue::Str(text.to_uppercase())),
+                (Builtin::Lower, [RefValue::Str(text)]) => Some(RefValue::Str(text.to_lowercase())),
                 _ => None,
             }
         }
@@ -609,10 +602,11 @@ fn random_expr(prng: &mut Prng, depth: u32, target: GenType, names: &[(String, G
     match target {
         GenType::Int => {
             if prng.chance(INT_BUILTIN_CHANCE) {
-                let builtin = match prng.below(3) {
+                let builtin = match prng.below(4) {
                     0 => Builtin::Len,
                     1 => Builtin::StringToInt,
-                    _ => Builtin::BoolToInt,
+                    2 => Builtin::BoolToInt,
+                    _ => Builtin::IndexOf,
                 };
                 random_builtin_call(prng, depth, builtin, names)
             } else {
@@ -656,14 +650,13 @@ fn random_expr(prng: &mut Prng, depth: u32, target: GenType, names: &[(String, G
         }
         GenType::Str => {
             if prng.chance(STR_BUILTIN_CHANCE) {
-                let builtin = match prng.below(8) {
+                let builtin = match prng.below(7) {
                     0 => Builtin::IntToString,
                     1 => Builtin::BoolToString,
                     2 => Builtin::CharAt,
                     3 => Builtin::Substring,
-                    4 => Builtin::IndexOf,
-                    5 => Builtin::Trim,
-                    6 => Builtin::Upper,
+                    4 => Builtin::Trim,
+                    5 => Builtin::Upper,
                     _ => Builtin::Lower,
                 };
                 random_builtin_call(prng, depth, builtin, names)
@@ -1008,22 +1001,13 @@ fn string_search_and_case_builtins_agree_with_the_reference_at_boundaries() {
         ("index_of(\"hello\", \"\")", Some(RefValue::Int(0))),
         ("index_of(\"héllo\", \"l\")", Some(RefValue::Int(2))),
         ("index_of(\"\", \"a\")", Some(RefValue::Int(-1))),
-        (
-            "trim(\"  hi  \")",
-            Some(RefValue::Str("hi".to_owned())),
-        ),
+        ("trim(\"  hi  \")", Some(RefValue::Str("hi".to_owned()))),
         ("trim(\"hi\")", Some(RefValue::Str("hi".to_owned()))),
         ("trim(\"\")", Some(RefValue::Str(String::new()))),
-        (
-            "upper(\"hello\")",
-            Some(RefValue::Str("HELLO".to_owned())),
-        ),
+        ("upper(\"hello\")", Some(RefValue::Str("HELLO".to_owned()))),
         ("lower(\"HELLO\")", Some(RefValue::Str("hello".to_owned()))),
         ("upper(\"a1!\")", Some(RefValue::Str("A1!".to_owned()))),
-        (
-            "upper(\"café\")",
-            Some(RefValue::Str("CAFÉ".to_owned())),
-        ),
+        ("upper(\"café\")", Some(RefValue::Str("CAFÉ".to_owned()))),
     ];
     for (source, expected) in cases {
         assert_agrees(&source, expected);

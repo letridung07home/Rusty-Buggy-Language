@@ -459,9 +459,7 @@ fn evaluate_builtin_call(
             }
             if start > end {
                 return Err(positioned_error(
-                    format!(
-                        "invalid substring range: start {start} is after end {end}"
-                    ),
+                    format!("invalid substring range: start {start} is after end {end}"),
                     position,
                 ));
             }
@@ -1372,8 +1370,14 @@ mod tests {
 
     #[test]
     fn evaluates_the_substring_builtin() {
-        assert_eq!(evaluate_source("substring(\"hello\", 0, 5)"), Ok(string("hello")));
-        assert_eq!(evaluate_source("substring(\"hello\", 1, 3)"), Ok(string("el")));
+        assert_eq!(
+            evaluate_source("substring(\"hello\", 0, 5)"),
+            Ok(string("hello"))
+        );
+        assert_eq!(
+            evaluate_source("substring(\"hello\", 1, 3)"),
+            Ok(string("el"))
+        );
         // An empty range is a valid empty substring.
         assert_eq!(evaluate_source("substring(\"hello\", 2, 2)"), Ok(string("")));
         // End may pass the last character: the slice stops at the end.
@@ -1403,13 +1407,19 @@ mod tests {
     fn evaluates_the_index_of_builtin() {
         assert_eq!(evaluate_source("index_of(\"hello\", \"ell\")"), Ok(int(1)));
         assert_eq!(evaluate_source("index_of(\"hello\", \"h\")"), Ok(int(0)));
-        assert_eq!(evaluate_source("index_of(\"hello\", \"hello\")"), Ok(int(0)));
+        assert_eq!(
+            evaluate_source("index_of(\"hello\", \"hello\")"),
+            Ok(int(0))
+        );
         // An empty needle matches at the start, mirroring `str::find`.
         assert_eq!(evaluate_source("index_of(\"hello\", \"\")"), Ok(int(0)));
         // The result counts characters, not UTF-8 bytes: the first `l` sits
         // after `h` and `é`.
         assert_eq!(evaluate_source("index_of(\"héllo\", \"l\")"), Ok(int(2)));
-        assert_eq!(evaluate_source("index_of(\"hello\", \"world\")"), Ok(int(-1)));
+        assert_eq!(
+            evaluate_source("index_of(\"hello\", \"world\")"),
+            Ok(int(-1))
+        );
         assert_eq!(evaluate_source("index_of(\"\", \"a\")"), Ok(int(-1)));
     }
 
