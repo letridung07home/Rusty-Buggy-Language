@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.0] - 2026-09-05
+
+### Added
+
+- Added six string builtins: `char_at(s, i)` returns the one-character
+  string at zero-based index `i`, counting Unicode scalar values the way
+  `len` counts; `substring(s, start, end)` returns the end-exclusive
+  character slice; `index_of(s, needle)` returns the first occurrence's
+  character index or `-1` when the needle is absent; `trim(s)` strips
+  surrounding Unicode whitespace; and `upper(s)` / `lower(s)` apply Unicode
+  case mapping. Out-of-range `char_at` indexes and `substring` bounds report
+  the positioned error `string index out of range: index <i>[, length <l>]`,
+  a reversed `substring` range reports `invalid substring range: start <s>
+  is after end <e>`, and all six keep the established builtin rules: fixed
+  signatures, duplicate-declaration rejection, no call-depth consumption.
+
 ## [2.6.0] - 2026-09-02
 
 ### Added

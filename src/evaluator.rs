@@ -356,7 +356,8 @@ fn evaluate_call(
 
 /// Evaluates a call to a fixed-signature builtin function (`len`,
 /// `int_to_string`, `string_to_int`, `bool_to_int`, `int_to_bool`,
-/// `bool_to_string`, `string_to_bool`), mirroring
+/// `bool_to_string`, `string_to_bool`, `char_at`, `substring`, `index_of`,
+/// `trim`, `upper`, `lower`), mirroring
 /// the user-function runtime defenses with the builtin's name substituted. The
 /// call itself adds no evaluation frame, so it consumes no call depth.
 fn evaluate_builtin_call(
@@ -432,7 +433,60 @@ fn evaluate_builtin_call(
                 ))
             }
         },
+        ("char_at", [Value::String(text), Value::Int(index)]) => {
+            let Some(character) = text.chars().nth(index_to_usize(*index, position)?) else {
+                return Err(positioned_error(
+                    format!(
+                        "string index out of range: index {index}, length {}",
+                        text.chars().count()
+                    ),
+                    position,
+                ));
+            };
+            Value::String(character.to_string())
+        }
+        ("substring", [Value::String(text), Value::Int(start), Value::Int(end)]) => {
+            let start = index_to_usize(*start, position)?;
+            let end = index_to_usize(*end, position)?;
+            if start > end {
+                return Err(positioned_error(
+                    format!(
+                        "invalid substring range: start {start} is after end {end}"
+                    ),
+                    position,
+                ));
+            }
+            let skipped: usize = text.chars().take(start).map(char::len_utf8).sum();
+            let taken: usize = text
+                .chars()
+                .skip(start)
+                .take(end.saturating_sub(start))
+                .map(char::len_utf8)
+                .sum();
+            Value::String(text[skipped..skipped + taken].to_owned())
+        }
+        ("index_of", [Value::String(text), Value::String(needle)]) => {
+            Value::Int(match text.find(needle) {
+                Some(byte_index) => text[..byte_index].chars().count() as i64,
+                None => -1,
+            })
+        }
+        ("trim", [Value::String(text)]) => Value::String(text.trim().to_owned()),
+        ("upper", [Value::String(text)]) => Value::String(text.to_uppercase()),
+        ("lower", [Value::String(text)]) => Value::String(text.to_lowercase()),
         _ => unreachable!("the signature defenses above cover every builtin"),
+    })
+}
+
+/// Converts a builtin index argument to a `usize` for char indexing. Negative
+/// indexes are rejected with the same positioned out-of-range error as large
+/// ones so the defender's `usize` conversion cannot panic.
+fn index_to_usize(index: i64, position: Option<SourcePosition>) -> Result<usize, Error> {
+    usize::try_from(index).map_err(|_| {
+        positioned_error(
+            format!("string index out of range: index {index}"),
+            position,
+        )
     })
 }
 
@@ -1279,6 +1333,112 @@ mod tests {
         assert_eq!(
             evaluate_source("string_to_bool(bool_to_string(!true))"),
             Ok(boolean(false))
+        );
+    }
+
+    #[test]
+    fn evaluates_the_char_at_builtin() {
+        assert_eq!(evaluate_source("char_at(\"hello\", 0)"), Ok(string("h")));
+        assert_eq!(evaluate_source("char_at(\"hello\", 4)"), Ok(string("o")));
+        // Indexes count Unicode scalar values, like `len`, not UTF-8 bytes.
+        assert_eq!(evaluate_source("char_at(\"héllo\", 1)"), Ok(string("é")));
+        assert_eq!(evaluate_source("char_at(\"\", 0)"), Ok(string("")));
+    }
+
+    #[test]
+    fn char_at_rejects_out_of_range_indexes() {
+        assert_eq!(
+            error_message("char_at(\"hello\", 5)"),
+            "string index out of range: index 5, length 5"
+        );
+        assert_eq!(
+            error_message("char_at(\"hello\", -1)"),
+            "string index out of range: index -1"
+        );
+        assert_eq!(
+            error_message("char_at(\"\", 0) || true"),
+            "string index out of range: index 0, length 0"
+        );
+    }
+
+    #[test]
+    fn evaluates_the_substring_builtin() {
+        assert_eq!(evaluate_source("substring(\"hello\", 0, 5)"), Ok(string("hello")));
+        assert_eq!(evaluate_source("substring(\"hello\", 1, 3)"), Ok(string("el")));
+        // An empty range is a valid empty substring.
+        assert_eq!(evaluate_source("substring(\"hello\", 2, 2)"), Ok(string("")));
+        // End may pass the last character: the slice stops at the end.
+        assert_eq!(evaluate_source("substring(\"hello\", 3, 99)"), Ok(string("lo")));
+        assert_eq!(evaluate_source("substring(\"hello\", 5, 99)"), Ok(string("")));
+        // Ranges count Unicode scalar values, like `len`.
+        assert_eq!(evaluate_source("substring(\"héllo\", 1, 3)"), Ok(string("él")));
+    }
+
+    #[test]
+    fn substring_rejects_invalid_ranges() {
+        assert_eq!(
+            error_message("substring(\"hello\", 2, 1)"),
+            "invalid substring range: start 2 is after end 1"
+        );
+        assert_eq!(
+            error_message("substring(\"hello\", 6, 7)"),
+            "string index out of range: index 6, length 5"
+        );
+        assert_eq!(
+            error_message("substring(\"hello\", 0, -1)"),
+            "string index out of range: index -1"
+        );
+    }
+
+    #[test]
+    fn evaluates_the_index_of_builtin() {
+        assert_eq!(evaluate_source("index_of(\"hello\", \"ell\")"), Ok(int(1)));
+        assert_eq!(evaluate_source("index_of(\"hello\", \"h\")"), Ok(int(0)));
+        assert_eq!(evaluate_source("index_of(\"hello\", \"hello\")"), Ok(int(0)));
+        // An empty needle matches at the start, mirroring `str::find`.
+        assert_eq!(evaluate_source("index_of(\"hello\", \"\")"), Ok(int(0)));
+        // The result counts characters, not UTF-8 bytes.
+        assert_eq!(evaluate_source("index_of(\"héllo\", \"l\")"), Ok(int(3)));
+        assert_eq!(evaluate_source("index_of(\"hello\", \"world\")"), Ok(int(-1)));
+        assert_eq!(evaluate_source("index_of(\"\", \"a\")"), Ok(int(-1)));
+    }
+
+    #[test]
+    fn evaluates_the_trim_builtin() {
+        assert_eq!(evaluate_source("trim(\"  hi  \")"), Ok(string("hi")));
+        assert_eq!(evaluate_source("trim(\"\\thi\\n\")"), Ok(string("hi")));
+        assert_eq!(evaluate_source("trim(\"hi\")"), Ok(string("hi")));
+        // Interior whitespace is untouched.
+        assert_eq!(evaluate_source("trim(\" a b \")"), Ok(string("a b")));
+        assert_eq!(evaluate_source("trim(\"   \")"), Ok(string("")));
+    }
+
+    #[test]
+    fn evaluates_the_upper_and_lower_builtins() {
+        assert_eq!(evaluate_source("upper(\"hello\")"), Ok(string("HELLO")));
+        assert_eq!(evaluate_source("lower(\"HELLO\")"), Ok(string("hello")));
+        assert_eq!(evaluate_source("upper(\"MiXeD\")"), Ok(string("MIXED")));
+        assert_eq!(evaluate_source("lower(\"MiXeD\")"), Ok(string("mixed")));
+        // Non-letters pass through unchanged.
+        assert_eq!(evaluate_source("upper(\"a1!\")"), Ok(string("A1!")));
+        // Case mapping is Unicode-aware.
+        assert_eq!(evaluate_source("upper(\"café\")"), Ok(string("CAFÉ")));
+        assert_eq!(evaluate_source("lower(\"CAFÉ\")"), Ok(string("café")));
+    }
+
+    #[test]
+    fn composes_the_string_builtins() {
+        assert_eq!(
+            evaluate_source("char_at(upper(\"abc\"), 1)"),
+            Ok(string("B"))
+        );
+        assert_eq!(
+            evaluate_source("substring(trim(\"  hello  \"), 1, 3)"),
+            Ok(string("el"))
+        );
+        assert_eq!(
+            evaluate_source("index_of(upper(\"hello\"), \"LL\")"),
+            Ok(int(2))
         );
     }
 }

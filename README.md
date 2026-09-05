@@ -14,10 +14,12 @@ and `%` with checked signed 64-bit arithmetic, `if`/`else` expressions with
 `{ }` blocks and lexical scoping, function declarations
 (`fn name(param, ...) = { ... };`) with recursive calls and monomorphic type
 inference, the built-in functions `len`, `int_to_string`, `string_to_int`,
-`bool_to_int`, `int_to_bool`, `bool_to_string`, and `string_to_bool`, and `//`
-line comments and `/* */` block Comparisons produce real booleans, `<`/`<=`/`>`/`>=` also compare
-two strings lexicographically, `+` concatenates strings, and a static type
-checker rejects ill-typed programs before evaluation.
+`bool_to_int`, `int_to_bool`, `bool_to_string`, `string_to_bool`, `char_at`,
+`substring`, `index_of`, `trim`, `upper`, and `lower`, and `//` line comments
+and `/* */` block comments. Comparisons produce real booleans,
+`<`/`<=`/`>`/`>=` also compare two strings lexicographically, `+`
+concatenates strings, and a static type checker rejects ill-typed programs
+before evaluation.
 
 Programs can also be evaluated programmatically: the library's `evaluate`
 entry point returns a typed `Value` result (`Int`, `Bool`, or `String`)
@@ -57,6 +59,21 @@ cargo run -- "fn square(x) = { x * x }; square(7)"
 
 cargo run -- "fn fact(n) = { if n <= 1 { 1 } else { n * fact(n - 1) } }; fact(5)"
 # 120
+
+cargo run -- "char_at(\"hello\", 1)"
+# e
+
+cargo run -- "substring(\"hello\", 1, 3)"
+# el
+
+cargo run -- "index_of(\"hello\", \"ll\")"
+# 2
+
+cargo run -- "trim(\"  hi  \")"
+# hi
+
+cargo run -- "upper(\"mixed\")"
+# MIXED
 
 cargo run -- "1 /* group */ + 2 * 3 // note"
 # 7

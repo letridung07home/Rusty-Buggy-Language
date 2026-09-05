@@ -183,6 +183,25 @@ version.
 - [x] Extend the property-based reference model to generated function
   programs.
 
+### v2.7.0 milestone — delivered
+
+- [x] Add the string-inspection builtins: `char_at(s, i)` returns the
+  one-character string at zero-based Unicode scalar value `i` (counting the
+  way `len` counts) and reports a positioned error when the index is out of
+  range; `substring(s, start, end)` returns the end-exclusive slice and
+  reports a positioned error when the range is invalid; `index_of(s, needle)`
+  returns the first occurrence's scalar-value index, or `-1` when absent.
+- [x] Add the string-reshaping builtins: `trim(s)` strips surrounding
+  Unicode whitespace, and `upper(s)` / `lower(s)` apply Unicode case mapping
+  (the result may differ in length from the input).
+- [x] Keep the established builtin rules: fixed signatures, duplicate
+  declaration rejection, no call-depth consumption, positioned errors where
+  applicable.
+- [x] Generate calls to the new builtins in the property-based reference
+  model, and cover the error paths with unit tests.
+- [x] Update the language reference, tutorial, CLI help, and examples
+  alongside the implementation, and record the change in the changelog.
+
 ### Remaining v2 backlog
 
 Concrete deliverables for the later v2 releases, grouped by theme and
@@ -204,6 +223,8 @@ on completion. Developers choose which tasks ship in each release.
 - [x] Add the boolean↔string conversion builtins `bool_to_string` and
   `string_to_bool`, completing the conversion matrix across integers,
   booleans, and strings. (shipped in v2.6.0)
+- [x] Add the string-inspection and reshaping builtins `char_at`,
+  `substring`, `index_of`, `trim`, `upper`, and `lower`. (shipped in v2.7.0)
 
 **Stability and distribution**
 

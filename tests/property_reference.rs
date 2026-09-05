@@ -4,11 +4,12 @@
 //! For a deterministic number of random cases, a generator builds a
 //! well-typed expression (or a program of immutable `let` bindings ending in
 //! an expression) over integers, booleans, and strings, with calls to the
-//! seven fixed-signature builtins (`len`, `int_to_string`, `string_to_int`,
-//! `bool_to_int`, `int_to_bool`, `bool_to_string`, `string_to_bool`) and
-//! lexicographic string ordering woven in
-//! like any other node. It renders the tree back to source text with minimal
-//! parentheses that respect the language's precedence and associativity, and
+//! thirteen fixed-signature builtins (`len`, `int_to_string`, `string_to_int`,
+//! `bool_to_int`, `int_to_bool`, `bool_to_string`, `string_to_bool`,
+//! `char_at`, `substring`, `index_of`, `trim`, `upper`, `lower`) and
+//! lexicographic string ordering woven in like any other node. It renders
+//! the tree back to source text with minimal parentheses that respect the
+//! language's precedence and associativity, and
 //! then requires the lexer/parser/type-checker/evaluator pipeline and a
 //! straightforward recursive reference evaluator to agree: either both
 //! succeed with the same [`Value`], or both fail. Being dependency-free, the
@@ -28,7 +29,10 @@ const LITERAL_BOUND: i64 = 50;
 /// numeric texts feed `string_to_int`'s success paths directly, with leading
 /// zeros and the exact `i64::MIN` boundary alongside texts (`+5`, a leading
 /// space, an `i64` overflow) that both sides must reject, plus the exact
-/// `true`/`false` texts `string_to_bool` accepts.
+/// `true`/`false` texts `string_to_bool` accepts. The case and padding pairs
+/// (`hello`/`HELLO`, `ABC`, `  pad  `) feed `upper`, `lower`, and `trim`, and
+/// the short substrings (`ell`, `z`, `é`) feed `char_at`, `substring`, and
+/// `index_of`, with the accented `é` exercising character (not byte) indexes.
 const STRING_POOL: &[&str] = &[
     "",
     "hello",
@@ -44,6 +48,13 @@ const STRING_POOL: &[&str] = &[
     "-9223372036854775808",
     "true",
     "false",
+    "  pad  ",
+    "HELLO",
+    "ell",
+    "z",
+    "é",
+    "ABC",
+    "a1!",
 ];
 
 /// The number of declaration expressions generated ahead of the final one.
@@ -51,9 +62,11 @@ const MAX_DECLARATIONS: usize = 3;
 
 /// Percent chance that an interior expression is generated as a builtin call
 /// instead of an operator node, per result type: integer-typed expressions
-/// have three builtins to pick from, and string- and boolean-typed ones two
-/// each. The values keep builtin calls frequent while the pre-existing
-/// node kinds retain most of their original share.
+/// have three builtins to pick from, boolean-typed ones two, and
+/// string-typed ones eight (the two conversions plus the six string
+/// inspection and reshaping builtins). The values keep builtin calls
+/// frequent while the pre-existing node kinds retain most of their original
+/// share.
 const INT_BUILTIN_CHANCE: u64 = 35;
 const BOOL_BUILTIN_CHANCE: u64 = 25;
 const STR_BUILTIN_CHANCE: u64 = 30;
@@ -112,8 +125,8 @@ enum BinaryOp {
     NotEqual,
 }
 
-/// The seven fixed-signature builtin functions the language provides. The
-/// generator picks them by result type and recurses with the argument type
+/// The thirteen fixed-signature builtin functions the language provides. The
+/// generator picks them by result type and recurses with the argument types
 /// the type checker demands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Builtin {
@@ -124,6 +137,12 @@ enum Builtin {
     IntToBool,
     BoolToString,
     StringToBool,
+    CharAt,
+    Substring,
+    IndexOf,
+    Trim,
+    Upper,
+    Lower,
 }
 
 impl Builtin {
@@ -137,15 +156,29 @@ impl Builtin {
             Builtin::IntToBool => "int_to_bool",
             Builtin::BoolToString => "bool_to_string",
             Builtin::StringToBool => "string_to_bool",
+            Builtin::CharAt => "char_at",
+            Builtin::Substring => "substring",
+            Builtin::IndexOf => "index_of",
+            Builtin::Trim => "trim",
+            Builtin::Upper => "upper",
+            Builtin::Lower => "lower",
         }
     }
 
-    /// The static type the call's single argument must have.
-    fn argument_type(self) -> GenType {
+    /// The static types the call's arguments must have, in order.
+    fn argument_types(self) -> &'static [GenType] {
         match self {
-            Builtin::Len | Builtin::StringToInt | Builtin::StringToBool => GenType::Str,
-            Builtin::IntToString | Builtin::IntToBool => GenType::Int,
-            Builtin::BoolToInt | Builtin::BoolToString => GenType::Bool,
+            Builtin::Len
+            | Builtin::StringToInt
+            | Builtin::StringToBool
+            | Builtin::Trim
+            | Builtin::Upper
+            | Builtin::Lower => &[GenType::Str],
+            Builtin::IntToString | Builtin::IntToBool => &[GenType::Int],
+            Builtin::BoolToInt | Builtin::BoolToString => &[GenType::Bool],
+            Builtin::CharAt => &[GenType::Str, GenType::Int],
+            Builtin::Substring => &[GenType::Str, GenType::Int, GenType::Int],
+            Builtin::IndexOf => &[GenType::Str, GenType::Str],
         }
     }
 }
@@ -172,7 +205,7 @@ enum Expr {
     },
     Call {
         builtin: Builtin,
-        argument: Box<Expr>,
+        arguments: Vec<Expr>,
     },
 }
 
@@ -295,7 +328,10 @@ fn render(expr: &Expr) -> String {
             render(then_branch),
             render(else_branch)
         ),
-        Expr::Call { builtin, argument } => format!("{}({})", builtin.name(), render(argument)),
+        Expr::Call { builtin, arguments } => {
+            let rendered: Vec<String> = arguments.iter().map(render).collect();
+            format!("{}({})", builtin.name(), rendered.join(", "))
+        }
     }
 }
 
@@ -346,29 +382,71 @@ fn reference_eval(expr: &Expr, values: &HashMap<String, RefValue>) -> Option<Ref
             RefValue::Bool(false) => reference_eval(else_branch, values),
             _ => None,
         },
-        Expr::Call { builtin, argument } => {
-            let value = reference_eval(argument, values)?;
-            match (builtin, value) {
-                (Builtin::Len, RefValue::Str(text)) => {
+        Expr::Call { builtin, arguments } => {
+            let mut argument_values = Vec::with_capacity(arguments.len());
+            for argument in arguments {
+                argument_values.push(reference_eval(argument, values)?);
+            }
+            match (builtin, argument_values.as_slice()) {
+                (Builtin::Len, [RefValue::Str(text)]) => {
                     Some(RefValue::Int(text.chars().count() as i64))
                 }
-                (Builtin::IntToString, RefValue::Int(value)) => {
+                (Builtin::IntToString, [RefValue::Int(value)]) => {
                     Some(RefValue::Str(value.to_string()))
                 }
-                (Builtin::StringToInt, RefValue::Str(text)) => {
-                    Some(RefValue::Int(parse_reference_integer(&text)?))
+                (Builtin::StringToInt, [RefValue::Str(text)]) => {
+                    Some(RefValue::Int(parse_reference_integer(text)?))
                 }
-                (Builtin::BoolToInt, RefValue::Bool(flag)) => Some(RefValue::Int(i64::from(flag))),
-                (Builtin::IntToBool, RefValue::Int(value)) => Some(RefValue::Bool(value != 0)),
-                (Builtin::BoolToString, RefValue::Bool(flag)) => {
-                    let text = if flag { "true" } else { "false" };
+                (Builtin::BoolToInt, [RefValue::Bool(flag)]) => {
+                    Some(RefValue::Int(i64::from(*flag)))
+                }
+                (Builtin::IntToBool, [RefValue::Int(value)]) => Some(RefValue::Bool(*value != 0)),
+                (Builtin::BoolToString, [RefValue::Bool(flag)]) => {
+                    let text = if *flag { "true" } else { "false" };
                     Some(RefValue::Str(text.to_owned()))
                 }
-                (Builtin::StringToBool, RefValue::Str(text)) => match text.as_str() {
+                (Builtin::StringToBool, [RefValue::Str(text)]) => match text.as_str() {
                     "true" => Some(RefValue::Bool(true)),
                     "false" => Some(RefValue::Bool(false)),
                     _ => None,
                 },
+                (Builtin::CharAt, [RefValue::Str(text), RefValue::Int(index)]) => {
+                    if *index < 0 {
+                        return None;
+                    }
+                    text.chars()
+                        .nth(*index as usize)
+                        .map(|character| RefValue::Str(character.to_string()))
+                }
+                (
+                    Builtin::Substring,
+                    [RefValue::Str(text), RefValue::Int(start), RefValue::Int(end)],
+                ) => {
+                    if *start < 0 || *end < 0 || start > end {
+                        return None;
+                    }
+                    Some(RefValue::Str(
+                        text.chars()
+                            .skip(*start as usize)
+                            .take((*end - *start) as usize)
+                            .collect(),
+                    ))
+                }
+                (Builtin::IndexOf, [RefValue::Str(text), RefValue::Str(needle)]) => {
+                    Some(RefValue::Int(match text.find(needle.as_str()) {
+                        Some(byte_index) => text[..byte_index].chars().count() as i64,
+                        None => -1,
+                    }))
+                }
+                (Builtin::Trim, [RefValue::Str(text)]) => {
+                    Some(RefValue::Str(text.trim().to_owned()))
+                }
+                (Builtin::Upper, [RefValue::Str(text)]) => {
+                    Some(RefValue::Str(text.to_uppercase()))
+                }
+                (Builtin::Lower, [RefValue::Str(text)]) => {
+                    Some(RefValue::Str(text.to_lowercase()))
+                }
                 _ => None,
             }
         }
@@ -571,10 +649,15 @@ fn random_expr(prng: &mut Prng, depth: u32, target: GenType, names: &[(String, G
         }
         GenType::Str => {
             if prng.chance(STR_BUILTIN_CHANCE) {
-                let builtin = if prng.below(2) == 0 {
-                    Builtin::IntToString
-                } else {
-                    Builtin::BoolToString
+                let builtin = match prng.below(8) {
+                    0 => Builtin::IntToString,
+                    1 => Builtin::BoolToString,
+                    2 => Builtin::CharAt,
+                    3 => Builtin::Substring,
+                    4 => Builtin::IndexOf,
+                    5 => Builtin::Trim,
+                    6 => Builtin::Upper,
+                    _ => Builtin::Lower,
                 };
                 random_builtin_call(prng, depth, builtin, names)
             } else {
@@ -602,18 +685,87 @@ fn int_arithmetic_operator(prng: &mut Prng) -> BinaryOp {
     }
 }
 
-/// A call to a fixed-signature builtin whose single argument is recursively
-/// generated with the type the builtin demands, so calls nest like any other
-/// node.
+/// A call to a fixed-signature builtin whose arguments are recursively
+/// generated with the types the builtin demands, so calls nest like any other
+/// node. The index arguments of `char_at` and `substring` are wrapped in a
+/// clamp derived from the same text expression, so most generated calls land
+/// in range and produce values instead of the (equally valid) range errors.
 fn random_builtin_call(
     prng: &mut Prng,
     depth: u32,
     builtin: Builtin,
     names: &[(String, GenType)],
 ) -> Expr {
-    Expr::Call {
-        builtin,
-        argument: Box::new(random_expr(prng, depth - 1, builtin.argument_type(), names)),
+    match builtin {
+        Builtin::CharAt => {
+            let text = random_expr(prng, depth - 1, GenType::Str, names);
+            let index = random_expr(prng, depth - 1, GenType::Int, names);
+            let clamped = clamped_index(index, &text);
+            Expr::Call {
+                builtin,
+                arguments: vec![text, clamped],
+            }
+        }
+        Builtin::Substring => {
+            let text = random_expr(prng, depth - 1, GenType::Str, names);
+            let start_index = random_expr(prng, depth - 1, GenType::Int, names);
+            let end_index = random_expr(prng, depth - 1, GenType::Int, names);
+            let start = clamped_index(start_index, &text);
+            // Adding the clamped offset to the start keeps `start <= end`
+            // structurally true, and an end past the text is a legal
+            // end-exclusive slice that stops at the last character.
+            let end = Expr::Binary {
+                op: BinaryOp::Add,
+                left: Box::new(start.clone()),
+                right: Box::new(clamped_index(end_index, &text)),
+            };
+            Expr::Call {
+                builtin,
+                arguments: vec![text, start, end],
+            }
+        }
+        _ => {
+            let arguments = builtin
+                .argument_types()
+                .iter()
+                .map(|argument_type| random_expr(prng, depth - 1, *argument_type, names))
+                .collect();
+            Expr::Call { builtin, arguments }
+        }
+    }
+}
+
+/// Builds `if index < 0 { 0 } else { if index <= len(text) { index }
+/// else { len(text) - 1 } }` from the given expressions. The result is an
+/// ordinary well-typed expression over the same pure text argument, so the
+/// rendered source evaluates identically on both sides of the comparison
+/// while usually naming an in-range character position. For an empty text the
+/// fallback `len(text) - 1` is negative, which both sides reject together.
+fn clamped_index(index: Expr, text: &Expr) -> Expr {
+    let length = || Expr::Call {
+        builtin: Builtin::Len,
+        arguments: vec![text.clone()],
+    };
+    Expr::If {
+        condition: Box::new(Expr::Binary {
+            op: BinaryOp::LessThan,
+            left: Box::new(index.clone()),
+            right: Box::new(Expr::Lit(0)),
+        }),
+        then_branch: Box::new(Expr::Lit(0)),
+        else_branch: Box::new(Expr::If {
+            condition: Box::new(Expr::Binary {
+                op: BinaryOp::LessThanOrEqual,
+                left: Box::new(index),
+                right: Box::new(length()),
+            }),
+            then_branch: Box::new(index),
+            else_branch: Box::new(Expr::Binary {
+                op: BinaryOp::Subtract,
+                left: Box::new(length()),
+                right: Box::new(Expr::Lit(1)),
+            }),
+        }),
     }
 }
 
@@ -794,6 +946,78 @@ fn string_to_bool_boundary_texts_agree_with_the_reference() {
             "false" => Some(RefValue::Bool(false)),
             _ => None,
         };
+        assert_agrees(&source, expected);
+    }
+}
+
+/// Pins `char_at` and `substring` index handling at the boundaries the random
+/// generator may not reach within a given seed, including the negative and
+/// out-of-range indexes both sides must reject together and the
+/// end-past-the-text slice both sides must truncate identically.
+#[test]
+fn string_index_builtins_agree_with_the_reference_at_boundaries() {
+    let cases: Vec<(String, Option<RefValue>)> = vec![
+        ("char_at(\"hello\", 0)", Some(RefValue::Str("h".to_owned()))),
+        ("char_at(\"hello\", 4)", Some(RefValue::Str("o".to_owned()))),
+        ("char_at(\"héllo\", 1)", Some(RefValue::Str("é".to_owned()))),
+        ("char_at(\"hello\", 5)", None),
+        ("char_at(\"hello\", -1)", None),
+        ("char_at(\"\", 0)", None),
+        (
+            "substring(\"hello\", 1, 3)",
+            Some(RefValue::Str("el".to_owned())),
+        ),
+        (
+            "substring(\"hello\", 2, 2)",
+            Some(RefValue::Str(String::new())),
+        ),
+        (
+            "substring(\"hello\", 3, 99)",
+            Some(RefValue::Str("lo".to_owned())),
+        ),
+        (
+            "substring(\"héllo\", 1, 3)",
+            Some(RefValue::Str("él".to_owned())),
+        ),
+        ("substring(\"hello\", 2, 1)", None),
+        ("substring(\"hello\", -1, 2)", None),
+        ("substring(\"hello\", 0, -1)", None),
+        ("substring(\"hello\", 6, 7)", None),
+    ];
+    for (source, expected) in cases {
+        assert_agrees(&source, expected);
+    }
+}
+
+/// Pins `index_of`, `trim`, `upper`, and `lower` at boundaries the random
+/// generator may not reach within a given seed, including the missing-needle
+/// `-1`, the empty needle's start match, and Unicode case mapping.
+#[test]
+fn string_search_and_case_builtins_agree_with_the_reference_at_boundaries() {
+    let cases: Vec<(String, Option<RefValue>)> = vec![
+        ("index_of(\"hello\", \"ell\")", Some(RefValue::Int(1))),
+        ("index_of(\"hello\", \"z\")", Some(RefValue::Int(-1))),
+        ("index_of(\"hello\", \"\")", Some(RefValue::Int(0))),
+        ("index_of(\"héllo\", \"l\")", Some(RefValue::Int(3))),
+        ("index_of(\"\", \"a\")", Some(RefValue::Int(-1))),
+        (
+            "trim(\"  hi  \")",
+            Some(RefValue::Str("hi".to_owned())),
+        ),
+        ("trim(\"hi\")", Some(RefValue::Str("hi".to_owned()))),
+        ("trim(\"\")", Some(RefValue::Str(String::new()))),
+        (
+            "upper(\"hello\")",
+            Some(RefValue::Str("HELLO".to_owned())),
+        ),
+        ("lower(\"HELLO\")", Some(RefValue::Str("hello".to_owned()))),
+        ("upper(\"a1!\")", Some(RefValue::Str("A1!".to_owned()))),
+        (
+            "upper(\"café\")",
+            Some(RefValue::Str("CAFÉ".to_owned())),
+        ),
+    ];
+    for (source, expected) in cases {
         assert_agrees(&source, expected);
     }
 }

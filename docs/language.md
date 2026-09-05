@@ -256,7 +256,7 @@ exhaust the stack.
 
 ## Standard library functions
 
-Seven built-in functions are always available with fixed signatures:
+Thirteen built-in functions are always available with fixed signatures:
 
 | Function | Signature | Behavior |
 | --- | --- | --- |
@@ -267,6 +267,12 @@ Seven built-in functions are always available with fixed signatures:
 | `int_to_bool` | `int_to_bool(Int) -> Bool` | `false` for `0` and `true` for any other integer. |
 | `bool_to_string` | `bool_to_string(Bool) -> String` | The text `"true"` or `"false"`, matching the boolean literal spelling. |
 | `string_to_bool` | `string_to_bool(String) -> Bool` | Parses the text produced by `bool_to_string` back into a boolean. |
+| `char_at` | `char_at(String, Int) -> String` | The one-character string at the zero-based index, counting characters like `len`. |
+| `substring` | `substring(String, Int, Int) -> String` | The characters from `start` up to (but not including) `end`, counted like `len`. |
+| `index_of` | `index_of(String, String) -> Int` | The index of the first occurrence of the needle, or `-1` when it is absent. |
+| `trim` | `trim(String) -> String` | The string with surrounding Unicode whitespace removed. |
+| `upper` | `upper(String) -> String` | The string with Unicode uppercase case mapping applied. |
+| `lower` | `lower(String) -> String` | The string with Unicode lowercase case mapping applied. |
 
 `string_to_int` accepts only an optional leading `-` followed by one or more
 ASCII decimal digits:
@@ -287,6 +293,28 @@ empty string — is rejected with the positioned error `invalid boolean text:
 '<text>'` at the call site; for example, `string_to_bool("True")` and
 `string_to_bool(" true")` are errors, while
 `string_to_bool(bool_to_string(b))` round-trips every boolean.
+
+`char_at` and `substring` index characters the same way `len` counts them,
+by Unicode scalar value, so indexes are character positions rather than UTF-8
+byte offsets: `char_at("héllo", 1)` is `"é"` and `substring("héllo", 1, 3)`
+is `"él"`. A `char_at` index outside `0..len` — including any negative
+index — is rejected with the positioned error `string index out of range:
+index <index>, length <length>` at the call site. A `substring` bound outside
+that range, or a `start` greater than `end`, is likewise an error: out-of-range
+bounds report the same `string index out of range` message, while a reversed
+range reports `invalid substring range: start <start> is after end <end>`. An
+empty range `substring(s, n, n)` is valid and produces `""`, and an `end`
+past the last character stops at the end of the string, so
+`substring("hello", 3, 99)` is `"lo"`.
+
+`index_of` searches for the first occurrence of its needle and returns the
+character index of that match, or `-1` when the needle does not occur; an
+empty needle matches at index `0`. The result is again a character index, so
+`index_of("héllo", "l")` is `3`. `trim` removes surrounding Unicode
+whitespace and leaves interior whitespace untouched. `upper` and `lower`
+apply Unicode case mapping, so the result can differ in length from the
+input when a character expands under case mapping, and non-letters pass
+through unchanged.
 
 Builtins are recognized by name and are not ordinary values. A user function
 cannot take a builtin's name, so `fn len(s) = { 0 };` reports `duplicate
@@ -396,6 +424,11 @@ standard error, prints no result, and exits unsuccessfully. Errors include:
   reported as `invalid integer text: '<text>'`;
 - a `string_to_bool` argument that is not exactly `"true"` or `"false"`,
   reported as `invalid boolean text: '<text>'`;
+- a `char_at` index outside `0..len` or a `substring` bound outside that
+  range, reported as `string index out of range: index <index>[, length
+  <length>]`;
+- a `substring` call whose start bound is after its end bound, reported as
+  `invalid substring range: start <start> is after end <end>`;
 - function parameters or results whose types cannot be inferred from any body
   or call site;
 - type errors such as mixing operands of different types, a non-boolean `if`

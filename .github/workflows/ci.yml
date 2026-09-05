@@ -140,7 +140,7 @@ jobs:
       - name: Resolve the baseline tag
         id: baseline
         env:
-          CONFIGURED_BASELINE: v2.6.0
+          CONFIGURED_BASELINE: v2.7.0
         shell: bash
         run: |
           set -euo pipefail

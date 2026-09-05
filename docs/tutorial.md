@@ -186,7 +186,8 @@ type error reported before evaluation.
 
 ## Standard library functions
 
-Seven built-in functions cover common string, number, and boolean conversions:
+Thirteen built-in functions cover common string, number, and boolean
+conversions and string inspection or reshaping:
 
 ```bash
 cargo run -- "len(\"hello\")"
@@ -223,6 +224,40 @@ only those exact texts — `string_to_bool("True")` or `string_to_bool(" 1")`
 reports `invalid boolean text: '...'`. The two are inverses, so
 `string_to_bool(bool_to_string(3 > 2))` is `true`.
 
+Six more builtins inspect and reshape strings. Indexes count characters the
+same way `len` does, not UTF-8 bytes:
+
+```bash
+cargo run -- "char_at(\"hello\", 1)"
+# e
+
+cargo run -- "substring(\"hello\", 1, 3)"
+# el
+
+cargo run -- "index_of(\"hello\", \"ll\")"
+# 2
+
+cargo run -- "index_of(\"hello\", \"z\")"
+# -1
+
+cargo run -- "trim(\"  hi  \")"
+# hi
+
+cargo run -- "upper(\"mixed123\")"
+# MIXED123
+
+cargo run -- "lower(\"MIXED123\")"
+# mixed123
+```
+
+A `char_at` index outside the string — including a negative one — reports
+`string index out of range: ...`, as does a `substring` bound past the end or
+a start after its end (`invalid substring range: ...`). An empty range like
+`substring("hello", 2, 2)` is valid and yields `""`, and an end past the last
+character stops at the end of the string. Because `index_of` reports `-1`
+when the needle is absent, a search composes with the existing builtins:
+`index_of(s, "x") >= 0` tests containment.
+
 The ordering comparisons also compare strings lexicographically:
 
 ```bash
@@ -241,7 +276,8 @@ The `examples/` directory contains runnable programs for each feature:
 - `branching.rbl` — `if`/`else` with scoped declarations.
 - `functions.rbl` — function declarations, calls, and block bodies.
 - `recursion.rbl` — recursion and mutual recursion.
-- `stdlib.rbl` — the built-in functions and string ordering.
+- `stdlib.rbl` — the built-in functions, string inspection and reshaping,
+  and string ordering.
 - `fahrenheit.rbl` — an inline conversion.
 - `session.rbl` — a multi-step immutable-binding program.
 

@@ -17,7 +17,8 @@
 //!
 //! Calls to the fixed-signature builtin functions (`len`, `int_to_string`,
 //! `string_to_int`, `bool_to_int`, `int_to_bool`, `bool_to_string`,
-//! `string_to_bool`) are not inferred at all: they are checked directly
+//! `string_to_bool`, `char_at`, `substring`, `index_of`, `trim`, `upper`,
+//! `lower`) are not inferred at all: they are checked directly
 //! against the builtin table, and a user function may not take a builtin's
 //! name.
 
@@ -157,6 +158,36 @@ const BUILTINS: &[Builtin] = &[
         name: "string_to_bool",
         parameter_types: &[Type::String],
         result_type: Type::Bool,
+    },
+    Builtin {
+        name: "char_at",
+        parameter_types: &[Type::String, Type::Int],
+        result_type: Type::String,
+    },
+    Builtin {
+        name: "substring",
+        parameter_types: &[Type::String, Type::Int, Type::Int],
+        result_type: Type::String,
+    },
+    Builtin {
+        name: "index_of",
+        parameter_types: &[Type::String, Type::String],
+        result_type: Type::Int,
+    },
+    Builtin {
+        name: "trim",
+        parameter_types: &[Type::String],
+        result_type: Type::String,
+    },
+    Builtin {
+        name: "upper",
+        parameter_types: &[Type::String],
+        result_type: Type::String,
+    },
+    Builtin {
+        name: "lower",
+        parameter_types: &[Type::String],
+        result_type: Type::String,
     },
 ];
 
@@ -1216,6 +1247,14 @@ mod tests {
             check_error("fn int_to_string() = { \"\" }; 1"),
             "duplicate function declaration: 'int_to_string'"
         );
+        assert_eq!(
+            check_error("fn char_at() = { \"\" }; 1"),
+            "duplicate function declaration: 'char_at'"
+        );
+        assert_eq!(
+            check_error("fn lower() = { \"\" }; 1"),
+            "duplicate function declaration: 'lower'"
+        );
     }
 
     #[test]
@@ -1260,6 +1299,30 @@ mod tests {
             check_error("string_to_bool(true)"),
             "type mismatch in call to 'string_to_bool': expected argument 1 to be string, found boolean"
         );
+        assert_eq!(
+            check_error("char_at(\"ab\", true)"),
+            "type mismatch in call to 'char_at': expected argument 2 to be integer, found boolean"
+        );
+        assert_eq!(
+            check_error("index_of(\"ab\", 1)"),
+            "type mismatch in call to 'index_of': expected argument 2 to be string, found integer"
+        );
+        assert_eq!(
+            check_error("trim(true)"),
+            "type mismatch in call to 'trim': expected argument 1 to be string, found boolean"
+        );
+    }
+
+    #[test]
+    fn rejects_multi_argument_builtin_calls_with_the_wrong_arity() {
+        assert_eq!(
+            check_error("substring(\"ab\", 0)"),
+            "wrong number of arguments for function 'substring': expected 3, found 1"
+        );
+        assert_eq!(
+            check_error("char_at(\"ab\", 0, 1)"),
+            "wrong number of arguments for function 'char_at': expected 2, found 3"
+        );
     }
 
     #[test]
@@ -1280,6 +1343,19 @@ mod tests {
             "type mismatch in call to 'f': expected argument 1 to be string, found integer"
         );
         accepts("fn f(x) = { bool_to_string(x) }; f(false)");
+        // The multi-argument and string-result builtins pin through parameters
+        // with the same demand mechanism.
+        accepts("fn f(x) = { char_at(x, 0) }; f(\"ab\")");
+        assert_eq!(
+            check_error("fn f(x) = { char_at(x, 0) }; f(1)"),
+            "type mismatch in call to 'f': expected argument 1 to be string, found integer"
+        );
+        accepts("fn f(x) = { substring(x, 0, len(x)) }; f(\"ab\")");
+        accepts("fn f(x) = { upper(x) }; f(\"ab\")");
+        assert_eq!(
+            check_error("fn f(x) = { upper(x) }; f(true)"),
+            "type mismatch in call to 'f': expected argument 1 to be string, found boolean"
+        );
     }
 
     #[test]
