@@ -38,7 +38,7 @@ jobs:
       # This crate has no external dependencies, so cache the crate's own
       # build artifacts to make re-runs of the same commit cheap.
       - name: Cache Cargo build artifacts
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           cache-workspace-crates: "true"
 
@@ -83,7 +83,7 @@ jobs:
       # coverage instrumentation anyway.
       - name: Cache Cargo artifacts
         id: rust-cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 
       # Skip the compile when the binary was restored from cache.
       - name: Install cargo-llvm-cov
@@ -178,7 +178,7 @@ jobs:
 
       # Cached separately from the stable job via the toolchain-specific key.
       - name: Cache Cargo build artifacts
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           cache-workspace-crates: "true"
 
@@ -208,7 +208,7 @@ jobs:
           toolchain: stable
 
       - name: Cache Cargo build artifacts
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           cache-workspace-crates: "true"
 
