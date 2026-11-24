@@ -108,7 +108,7 @@ jobs:
       # time instead of on a release tag, and annotates PRs via a problem
       # matcher. Uses the actionlint release pinned inside the action.
       - name: Run actionlint
-        uses: devops-actions/actionlint@ec02b36684b2f574f1d219ad0a43b082e46bf3e4 # v0.1.13
+        uses: devops-actions/actionlint@216abcda9203ffeaeb953db1b151c94e1927c5bf # v1.0.0
 
   # Machine-checks the public library API with cargo-semver-checks against
   # the configured baseline git tag (the crate is not published to crates.io,
